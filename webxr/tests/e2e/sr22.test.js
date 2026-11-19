@@ -181,7 +181,8 @@ test('holding the overhead Safe Return button for a second starts the emergency 
   await touch('right', 'safeReturn');
   await ctx.page.waitForTimeout(400);
   assert.equal(await sr(() => window.__skyreach.aircraft.safeReturn.active), false, 'needs a press-and-hold');
-  await waitFor(ctx.page, () => window.__skyreach.aircraft.safeReturn.active, null, 5000);
+  // The hold timer counts simulated time, which runs slower than real time in software-rendered VR.
+  await waitFor(ctx.page, () => window.__skyreach.aircraft.safeReturn.active, null, 30000);
   await away('right');
   assert.match(await sr(() => window.__skyreach.message.current), /SAFE RETURN/);
   await tap('left', 'x-button'); // cancel
