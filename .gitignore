@@ -1,0 +1,27 @@
+# Node / WebXR
+node_modules/
+webxr/dist/
+*.log
+
+# Unity
+unity/[Ll]ibrary/
+unity/[Tt]emp/
+unity/[Oo]bj/
+unity/[Bb]uild/
+unity/[Bb]uilds/
+unity/[Ll]ogs/
+unity/[Uu]ser[Ss]ettings/
+unity/*.csproj
+unity/*.sln
+unity/.vs/
+unity/.idea/
+*.apk
+*.aab
+
+# OS
+.DS_Store
+Thumbs.db
+
+# .NET build output for the out-of-editor C# checks
+unity/Tests~/**/bin/
+unity/Tests~/**/obj/

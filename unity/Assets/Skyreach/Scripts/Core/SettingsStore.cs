@@ -1,0 +1,31 @@
+using UnityEngine;
+
+namespace Skyreach
+{
+    /// <summary>Per-device settings saved with PlayerPrefs: best time, comfort level, mute.</summary>
+    public sealed class SettingsStore
+    {
+        const string BestKey = "skyreach.bestTime";
+        const string ComfortKey = "skyreach.comfort";
+        const string MuteKey = "skyreach.muted";
+
+        public float BestTime = -1; // -1 = no record yet
+        public int ComfortLevel = 2;
+        public bool Muted;
+
+        public static SettingsStore Load() => new SettingsStore
+        {
+            BestTime = PlayerPrefs.GetFloat(BestKey, -1),
+            ComfortLevel = PlayerPrefs.GetInt(ComfortKey, 2),
+            Muted = PlayerPrefs.GetInt(MuteKey, 0) == 1,
+        };
+
+        public void Save()
+        {
+            PlayerPrefs.SetFloat(BestKey, BestTime);
+            PlayerPrefs.SetInt(ComfortKey, ComfortLevel);
+            PlayerPrefs.SetInt(MuteKey, Muted ? 1 : 0);
+            PlayerPrefs.Save();
+        }
+    }
+}

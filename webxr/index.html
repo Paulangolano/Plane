@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0b1118" />
+    <title>Skyreach VR</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <div id="app"></div>
+
+    <section id="overlay" class="overlay">
+      <div class="card">
+        <p class="eyebrow">Arcade VR flight</p>
+        <h1>Skyreach VR</h1>
+        <p class="lede">
+          Take off from the island airstrip, race through 12 rings across the archipelago, then land back on the
+          runway for the best time.
+        </p>
+
+        <div class="actions">
+          <button id="enter-vr" class="primary" disabled>Enter VR</button>
+          <button id="play-desktop" class="secondary">Fly on desktop</button>
+        </div>
+        <p id="vr-note" class="note">Checking for a VR headset…</p>
+
+        <div class="controls">
+          <div>
+            <h2>Quest Touch controllers</h2>
+            <ul>
+              <li><b>Right grip</b> grab the flight stick (or use the right thumbstick)</li>
+              <li><b>Left grip</b> grab the throttle and push it forward (or left thumbstick up)</li>
+              <li><b>Left thumbstick ←→</b> rudder</li>
+              <li><b>Right trigger</b> afterburner, <b>left trigger</b> brakes</li>
+              <li><b>A</b> restart, <b>B / X</b> comfort vignette, <b>Y</b> mute</li>
+              <li>Click the <b>left thumbstick</b> to re-centre your seat</li>
+            </ul>
+          </div>
+          <div>
+            <h2>Keyboard</h2>
+            <ul>
+              <li><b>W/S</b> pitch, <b>A/D</b> roll, <b>Q/E</b> rudder</li>
+              <li><b>Shift / Ctrl</b> throttle up / down</li>
+              <li><b>Space</b> afterburner, <b>B</b> brakes</li>
+              <li><b>V</b> chase camera, <b>Enter</b> restart</li>
+              <li>Drag the mouse to look around</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div id="desktop-help" class="desktop-help hidden">
+      <span>W/S pitch · A/D roll · Shift/Ctrl throttle · Space boost · V camera · Enter restart</span>
+      <button id="show-menu">Menu</button>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

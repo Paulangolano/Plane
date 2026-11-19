@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Runs Skyreach's flight model, world generation and ring course outside Unity.
+       UnityMath.cs supplies real Vector3/Quaternion/Mathf maths. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="UnityMath.cs;Tests.cs" />
+    <Compile Include="../../Assets/Skyreach/Scripts/Core/SkyreachConfig.cs" />
+    <Compile Include="../../Assets/Skyreach/Scripts/Core/SkyreachNoise.cs" />
+    <Compile Include="../../Assets/Skyreach/Scripts/World/WorldData.cs" />
+    <Compile Include="../../Assets/Skyreach/Scripts/World/RaceCourse.cs" />
+    <Compile Include="../../Assets/Skyreach/Scripts/Aircraft/FlightModel.cs" />
+  </ItemGroup>
+</Project>

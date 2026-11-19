@@ -1,0 +1,36 @@
+{
+    "name": "Skyreach.Editor.XR",
+    "rootNamespace": "Skyreach.EditorTools",
+    "references": [
+        "Skyreach.Editor",
+        "Unity.XR.Management",
+        "Unity.XR.Management.Editor",
+        "Unity.XR.OpenXR",
+        "Unity.XR.OpenXR.Editor"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "SKYREACH_XR_MANAGEMENT",
+        "SKYREACH_OPENXR"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.unity.xr.management",
+            "expression": "4.0.0",
+            "define": "SKYREACH_XR_MANAGEMENT"
+        },
+        {
+            "name": "com.unity.xr.openxr",
+            "expression": "1.0.0",
+            "define": "SKYREACH_OPENXR"
+        }
+    ],
+    "noEngineReferences": false
+}
