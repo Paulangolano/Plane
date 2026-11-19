@@ -57,10 +57,11 @@ test('keyboard takeoff: throttle up, pull back, get airborne', async () => {
 
 test('chase camera toggles with V', async () => {
   const { page } = ctx;
+  // The game reads key presses on its next frame, so wait for the switch.
   await page.keyboard.press('KeyV');
-  assert.equal(await game(page, () => window.__skyreach.viewMode), 'chase');
+  await waitFor(page, () => window.__skyreach.viewMode === 'chase');
   await page.keyboard.press('KeyV');
-  assert.equal(await game(page, () => window.__skyreach.viewMode), 'cockpit');
+  await waitFor(page, () => window.__skyreach.viewMode === 'cockpit');
 });
 
 test('no runtime errors during flight', async () => {
