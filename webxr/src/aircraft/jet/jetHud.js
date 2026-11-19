@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { FLIGHT, COURSE } from '../config.js';
+import { FLIGHT, COURSE } from '../../config.js';
+import { formatTime } from '../../ui/format.js';
 
 // Glass-cockpit display drawn to a canvas on the dashboard.
 // Redrawn ~15 times a second (texture uploads are expensive on Quest).
@@ -140,12 +141,6 @@ export class CockpitHUD {
       small(c, `${(s.ringDistance / 1000).toFixed(1)} km`, W - 120, 300);
     }
   }
-}
-
-export function formatTime(t) {
-  const m = Math.floor(t / 60);
-  const sec = t - m * 60;
-  return `${m}:${sec.toFixed(1).padStart(4, '0')}`;
 }
 
 function panel(c, x, y, w, h) {

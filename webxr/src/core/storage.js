@@ -2,7 +2,7 @@
 // (private browsing), so every access is guarded and the game works without it.
 
 const KEY = 'skyreach-vr-settings';
-const DEFAULTS = { bestTime: null, comfortLevel: 2, muted: false };
+const DEFAULTS = { bestTime: null, comfortLevel: 2, muted: false, aircraft: 'jet', assists: true };
 
 export function loadSettings() {
   try {

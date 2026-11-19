@@ -19,13 +19,32 @@
           runway for the best time.
         </p>
 
+        <fieldset class="aircraft-picker">
+          <legend>Choose your aircraft</legend>
+          <label class="aircraft">
+            <input type="radio" name="aircraft" value="jet" />
+            <span><b>Arcade Jet</b><small>Fast and forgiving, with an afterburner. Jump in and fly.</small></span>
+          </label>
+          <label class="aircraft">
+            <input type="radio" name="aircraft" value="sr22" />
+            <span
+              ><b>SR22-class (realistic)</b
+              ><small>310 hp piston single: side yoke, flaps, trim, glass cockpit, autopilot, parachute and emergency autoland.</small></span
+            >
+          </label>
+          <label class="assist" data-for="sr22">
+            <input type="checkbox" id="assists" />
+            <span>Flight assists: envelope protection, yaw damper, rudder steering</span>
+          </label>
+        </fieldset>
+
         <div class="actions">
           <button id="enter-vr" class="primary" disabled>Enter VR</button>
           <button id="play-desktop" class="secondary">Fly on desktop</button>
         </div>
         <p id="vr-note" class="note">Checking for a VR headset…</p>
 
-        <div class="controls">
+        <div class="controls" data-for="jet">
           <div>
             <h2>Quest Touch controllers</h2>
             <ul>
@@ -48,11 +67,39 @@
             </ul>
           </div>
         </div>
+
+        <div class="controls" data-for="sr22">
+          <div>
+            <h2>Quest Touch controllers</h2>
+            <ul>
+              <li><b>Left grip</b> hold the side yoke: pull back = nose up, sideways = roll. Its thumbstick is the <b>trim hat</b></li>
+              <li><b>Right grip</b> hold the power lever and push it forward</li>
+              <li>Or fly with the <b>right thumbstick</b>; <b>left thumbstick</b> = power ↑↓ and rudder ←→</li>
+              <li><b>Triggers</b> left / right toe brakes (steer on the ground)</li>
+              <li><b>A / B</b> flaps down / up, <b>X</b> autopilot on/off</li>
+              <li><b>Touch the panel buttons</b> with a fingertip: AP, HDG, ALT, VS, LVL, flaps, park brake…</li>
+              <li>Emergency: <b>grab and pull</b> the red overhead parachute handle, or <b>hold</b> the overhead Safe Return button</li>
+              <li><b>Hold Y</b> restart, click the <b>left thumbstick</b> to re-centre</li>
+            </ul>
+          </div>
+          <div>
+            <h2>Keyboard</h2>
+            <ul>
+              <li><b>W/S A/D Q/E</b> pitch, roll, rudder · <b>Shift/Ctrl</b> power</li>
+              <li><b>[ / ]</b> flaps up / down · <b>T / G</b> trim nose down / up</li>
+              <li><b>B</b> brakes · <b>, / .</b> left / right brake · <b>P</b> parking brake</li>
+              <li><b>Z</b> autopilot · <b>H</b> HDG · <b>K</b> ALT · <b>U</b> VS · <b>L</b> LVL</li>
+              <li><b>- / =</b> heading bug · <b>PgUp/PgDn</b> altitude · <b>J/N</b> VS</li>
+              <li>Hold <b>9</b> parachute · hold <b>0</b> Safe Return · <b>O</b> assists</li>
+              <li><b>V</b> chase camera · <b>Enter</b> restart</li>
+            </ul>
+          </div>
+        </div>
       </div>
     </section>
 
     <div id="desktop-help" class="desktop-help hidden">
-      <span>W/S pitch · A/D roll · Shift/Ctrl throttle · Space boost · V camera · Enter restart</span>
+      <span id="desktop-help-text">W/S pitch · A/D roll · Shift/Ctrl throttle · Space boost · V camera · Enter restart</span>
       <button id="show-menu">Menu</button>
     </div>
 

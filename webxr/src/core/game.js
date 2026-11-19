@@ -1,6 +1,4 @@
 import * as THREE from 'three';
-import { FlightModel, GEAR_HEIGHT } from '../aircraft/flightModel.js';
-import { createJet } from '../aircraft/jet.js';
 import { WorldData } from '../world/worldData.js';
 import { createTerrain } from '../world/terrain.js';
 import { createOcean } from '../world/ocean.js';
@@ -10,14 +8,16 @@ import { RaceCourse, createRingMeshes } from '../world/rings.js';
 import { createInputState, clearEdges } from '../input/inputState.js';
 import { XRInput } from '../input/xrInput.js';
 import { KeyboardInput } from '../input/keyboardInput.js';
-import { CockpitHUD, formatTime } from '../ui/hud.js';
 import { MessagePanel } from '../ui/messages.js';
 import { ComfortVignette } from '../ui/vignette.js';
+import { formatTime } from '../ui/format.js';
 import { GameAudio } from './audio.js';
-import { FLIGHT, COURSE } from '../config.js';
+import { COURSE } from '../config.js';
 import { loadSettings, saveSettings } from './storage.js';
+import { createAircraft, AIRCRAFT } from '../aircraft/registry.js';
 
-const TAKEOFF_KMH = Math.round(FLIGHT.takeoffSpeed * 3.6);
+// Main game loop: world, the active aircraft, input, race course, messages, audio.
+// Aircraft-specific behaviour (physics, cockpit, controls) lives in src/aircraft/*.
 
 export class Game {
   constructor(container) {
@@ -25,7 +25,7 @@ export class Game {
     this.settings = loadSettings();
     this.timer = new THREE.Timer();
     this.time = 0;
-    this.state = 'ready'; // ready | flying | crashed | finished
+    this.state = 'ready'; // ready | flying | crashed | finished | ended
     this.viewMode = 'cockpit'; // desktop only: cockpit | chase
     this.stats = { frames: 0, fps: 0, acc: 0 };
 
@@ -33,7 +33,7 @@ export class Game {
     this.initScene();
     this.initPlayer();
     this.initInput();
-    this.reset();
+    this.setAircraft(AIRCRAFT[this.settings.aircraft] ? this.settings.aircraft : 'jet');
 
     window.addEventListener('resize', () => this.onResize());
     this.renderer.setAnimationLoop((t) => this.tick(t));
@@ -56,7 +56,7 @@ export class Game {
 
     r.xr.addEventListener('sessionstart', () => {
       this.audio.start();
-      this.message.show('Skyreach VR', `Grab the throttle with your left hand and push it forward. Pull the stick back at ${TAKEOFF_KMH} km/h.`, 7);
+      this.message.show(...this.aircraft.startMessage, 7);
       this.camera.position.set(0, 0, 0);
       this.camera.rotation.set(0, 0, 0);
       this.setView('cockpit');
@@ -75,7 +75,6 @@ export class Game {
     this.camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.05, 60000);
     this.world = new WorldData();
     this.sky = createSky(this.scene);
-    this.scene.fog.near = 600;
     this.terrain = createTerrain(this.world);
     this.scene.add(this.terrain);
     this.ocean = createOcean(this.world, this.sky.sunDir);
@@ -89,40 +88,19 @@ export class Game {
   }
 
   initPlayer() {
-    this.flight = new FlightModel();
-    this.jet = createJet();
-    this.scene.add(this.jet.group);
     // The rig is the pilot's seat; the XR camera and controllers live inside it.
     this.rig = new THREE.Group();
     this.rig.name = 'rig';
-    this.jet.group.add(this.rig);
     this.rig.add(this.camera);
-    this.hud = new CockpitHUD(this.jet.hudAnchor);
-    this.message = new MessagePanel(this.jet.group);
+    this.message = new MessagePanel(this.rig);
     this.vignette = new ComfortVignette(this.camera, this.settings.comfortLevel);
     this.audio = new GameAudio();
     this.audio.setMuted(this.settings.muted);
-
-    this.flight.on('takeoff', () => {
-      if (this.state === 'ready') {
-        this.state = 'flying';
-        this.course.start();
-        this.message.show('Airborne!', 'Fly through the glowing rings in order.', 3);
-      }
-    });
-    this.flight.on('landed', ({ offRunway }) => {
-      if (this.state === 'finished') {
-        this.message.show('Touchdown!', offRunway ? 'Off-runway, but we will take it.' : 'Perfect landing. Press A to fly again.', 6, '#7fe08a');
-      } else {
-        this.message.show(offRunway ? 'Rough landing' : 'Landed', 'Throttle up to take off again.', 3);
-      }
-    });
-    this.flight.on('crash', ({ reason }) => this.onCrash(reason));
   }
 
   initInput() {
     this.input = createInputState();
-    this.xrInput = new XRInput(this.renderer, this.rig, this.jet.group);
+    this.xrInput = new XRInput(this.renderer, this.rig, this.rig);
     this.keyboard = new KeyboardInput();
     this.prevPos = new THREE.Vector3();
     this.prevQuat = new THREE.Quaternion();
@@ -148,23 +126,81 @@ export class Game {
     });
   }
 
+  // ------------------------------------------------------------ aircraft
+  /** Swap the active aircraft ('jet' or 'sr22'). */
+  setAircraft(id) {
+    if (this.aircraft?.id === id) return;
+    if (this.aircraft) {
+      this.aircraft.dispose();
+      this.scene.remove(this.aircraft.group);
+    }
+    const a = createAircraft(id, this.world, this.settings);
+    this.aircraft = a;
+    this.settings.aircraft = id;
+    saveSettings(this.settings);
+    this.scene.add(a.group);
+    a.group.add(this.rig);
+    this.message.setParent(a.group);
+    this.xrInput.setLayout(a.layout, a.group);
+    this.keyboard.setKeyMap(a.keyMap);
+    a.attach(this.context());
+    const m = a.model;
+    m.on('takeoff', () => {
+      if (this.state === 'ready') {
+        this.state = 'flying';
+        this.course.start();
+        this.message.show('Airborne!', 'Fly through the glowing rings in order.', 3);
+      }
+    });
+    m.on('landed', (e) => {
+      if (this.state === 'crashed' || this.state === 'ended') return;
+      this.message.show(...a.landedMessage(e, this.state === 'finished'));
+    });
+    m.on('crash', ({ reason }) => this.onCrash(reason));
+    this.setView(this.viewMode);
+    this.reset();
+  }
+
+  /** Read-only view of the game for aircraft modules. */
+  context() {
+    return {
+      game: this,
+      input: this.input,
+      course: this.course,
+      world: this.world,
+      message: this.message,
+      audio: this.audio,
+      time: this.time,
+      saveSettings: () => saveSettings(this.settings),
+    };
+  }
+
+  // Backwards-compatible handles used by tests and the console.
+  get flight() {
+    return this.aircraft.model;
+  }
+
+  get jet() {
+    return this.aircraft;
+  }
+
   // ------------------------------------------------------------ game flow
   reset() {
-    const spawn = new THREE.Vector3(0, this.world.runway.height + GEAR_HEIGHT, this.world.runway.halfLength - 40);
-    this.flight.reset(spawn, 0);
+    const a = this.aircraft;
+    const spawn = new THREE.Vector3(0, this.world.runway.height + a.gearHeight, this.world.runway.halfLength - 40);
+    a.model.reset(spawn, 0);
+    a.reset();
     this.input.throttle = 0;
     this.course.reset();
     this.ringVisuals.refresh();
     this.state = 'ready';
     this.crashTimer = 0;
     this.explosion.reset();
-    this.jet.group.visible = true;
-    this.syncJet();
-    this.prevPos.copy(this.flight.position);
-    this.prevQuat.copy(this.flight.quaternion);
-    if (this.message) {
-      this.message.show('Ready for takeoff', `Throttle up, then pull back at ${TAKEOFF_KMH} km/h.`, 6);
-    }
+    a.group.visible = true;
+    this.syncAircraft();
+    this.prevPos.copy(a.model.position);
+    this.prevQuat.copy(a.model.quaternion);
+    this.message.show(...a.readyMessage, 6);
   }
 
   onCrash(reason) {
@@ -175,7 +211,8 @@ export class Game {
     this.audio.crash();
     this.xrInput.pulse('left', 1, 400);
     this.xrInput.pulse('right', 1, 400);
-    this.message.show('Crashed!', `${reason} Press A (or Enter) to restart.`, Infinity, '#ff7a5a');
+    const how = this.aircraft.id === 'sr22' ? 'Hold Y (or Enter) to restart.' : 'Press A (or Enter) to restart.';
+    this.message.show('Crashed!', `${reason} ${how}`, Infinity, '#ff7a5a');
   }
 
   onRing(event) {
@@ -184,10 +221,11 @@ export class Game {
     if (event.type === 'finish') {
       this.state = 'finished';
       this.audio.chime(true);
-      const best = this.settings.bestTime;
+      const key = this.aircraft.id === 'jet' ? 'bestTime' : `bestTime_${this.aircraft.id}`;
+      const best = this.settings[key];
       const isBest = !best || event.time < best;
       if (isBest) {
-        this.settings.bestTime = event.time;
+        this.settings[key] = event.time;
         saveSettings(this.settings);
       }
       this.message.show(
@@ -204,21 +242,26 @@ export class Game {
 
   setView(mode) {
     this.viewMode = mode;
-    if (mode === 'chase' && !this.renderer.xr.isPresenting) {
-      this.rig.position.set(0, 4.5, 20);
+    const chase = mode === 'chase' && !this.renderer.xr.isPresenting;
+    if (chase) {
+      this.rig.position.set(this.aircraft?.id === 'sr22' ? 0.3 : 0, 4.5, 20);
       this.rig.rotation.set(-0.12, 0, 0);
     } else {
       this.rig.position.set(0, 0, 0);
       this.rig.rotation.set(0, 0, 0);
     }
+    this.aircraft?.setCockpitView(!chase);
   }
 
   // ----------------------------------------------------------------- loop
   tick(timestamp) {
     this.timer.update(timestamp);
-    const dt = Math.min(this.timer.getDelta(), 0.05);
+    const rawDt = this.timer.getDelta();
+    const dt = Math.min(rawDt, 0.05);
     this.time += dt;
-    this.updateFps(dt);
+    this.updateFps(rawDt);
+    const a = this.aircraft;
+    const m = a.model;
 
     const presenting = this.renderer.xr.isPresenting;
     if (presenting && this.calibrateIn > 0) {
@@ -230,40 +273,41 @@ export class Game {
     this.handleButtons();
 
     if (this.state !== 'crashed') {
-      this.prevPos.copy(this.flight.position);
-      this.prevQuat.copy(this.flight.quaternion);
-      this.flight.update(dt, this.input, (x, z) => this.world.sampleGround(x, z));
+      this.prevPos.copy(m.position);
+      this.prevQuat.copy(m.quaternion);
+      const flightInput = a.flightInput(dt, this.input);
+      m.update(dt, flightInput, (x, z) => this.world.sampleGround(x, z));
       if (this.state === 'flying' || this.state === 'finished') {
         this.course.tick(dt);
-        const ev = this.course.check(this.prevPos, this.flight.position);
+        const ev = this.course.check(this.prevPos, m.position);
         if (ev) this.onRing(ev);
       }
     } else {
       this.crashTimer += dt;
     }
 
-    this.syncJet();
+    this.syncAircraft();
     if (!presenting && this.viewMode === 'cockpit') {
       this.camera.rotation.set(this.look.pitch, this.look.yaw, 0, 'YXZ');
     }
 
     // Visual updates
-    const angSpeed = (2 * Math.acos(Math.min(1, Math.abs(this.prevQuat.dot(this.flight.quaternion))))) / Math.max(dt, 1e-4);
+    const angSpeed = (2 * Math.acos(Math.min(1, Math.abs(this.prevQuat.dot(m.quaternion))))) / Math.max(dt, 1e-4);
     this.vignette.update(dt, this.state === 'crashed' ? 0 : angSpeed);
-    this.jet.setControls(this.flight.pitch, this.flight.roll, this.flight.throttle, this.flight.boosting, this.time);
-    this.jet.stickHighlight.visible = this.input.stickNear && !this.input.stickGrabbed;
-    this.jet.throttleHighlight.visible = this.input.throttleNear && !this.input.throttleGrabbed;
+    const ctx = this.context();
+    a.update(dt, ctx);
     this.ocean.update(this.time);
-    this.sky.follow(this.flight.position);
+    this.sky.follow(m.position);
     this.ringVisuals.update(this.time);
     this.explosion.update(dt);
     this.message.update(dt);
-    this.hud.update(dt, this.hudState());
     this.audio.update({
-      throttle: this.flight.throttle,
-      speed: this.flight.speed,
-      boosting: this.flight.boosting,
+      throttle: m.throttle,
+      speed: m.speed,
+      boosting: m.boosting,
       crashed: this.state === 'crashed',
+      profile: a.audioProfile,
+      rpm: m.rpm,
     });
 
     clearEdges(this.input);
@@ -272,11 +316,12 @@ export class Game {
 
   handleButtons() {
     const i = this.input;
-    if (i.restart && (this.state !== 'flying' || this.flight.onGround)) this.reset();
+    const m = this.flight;
+    if (i.restart && (this.state !== 'flying' || m.onGround)) this.reset();
     else if (i.restart && this.state === 'flying') {
       // Restarting mid-air needs a second press within 2 s to avoid accidents.
       if (this.time - (this.lastRestartPress ?? -10) < 2) this.reset();
-      else this.message.show('Restart?', 'Press A again to go back to the runway.', 2);
+      else this.message.show('Restart?', this.aircraft.id === 'sr22' ? 'Hold again to go back to the runway.' : 'Press A again to go back to the runway.', 2);
       this.lastRestartPress = this.time;
     }
     if (i.cycleComfort) {
@@ -298,6 +343,9 @@ export class Game {
     if (i.toggleView && !this.renderer.xr.isPresenting) {
       this.setView(this.viewMode === 'cockpit' ? 'chase' : 'cockpit');
     }
+    for (const action of i.actions) {
+      if (this.state !== 'crashed') this.aircraft.handleAction(action, this.context());
+    }
   }
 
   /**
@@ -311,41 +359,10 @@ export class Game {
     this.rig.position.copy(head).applyAxisAngle(THREE.Object3D.DEFAULT_UP, -e.y).negate();
   }
 
-  syncJet() {
-    this.jet.group.position.copy(this.flight.position);
-    this.jet.group.quaternion.copy(this.flight.quaternion);
-  }
-
-  hudState() {
-    const f = this.flight;
-    const fwd = f.forward.clone();
-    let ringBearing = null;
-    let ringDistance = 0;
-    const ring = this.course.current;
-    if (ring && !this.course.finished) {
-      const local = ring.center.clone().sub(f.position);
-      ringDistance = local.length();
-      local.applyQuaternion(f.quaternion.clone().invert());
-      ringBearing = Math.atan2(local.x, -local.z);
-    }
-    return {
-      speed: f.speed,
-      altitude: f.altitude,
-      verticalSpeed: f.velocity.y,
-      throttle: f.throttle,
-      boostFuel: f.boostFuel,
-      boosting: f.boosting,
-      stalling: f.stalling,
-      onGround: f.onGround,
-      brake: this.input.brake,
-      bank: f.bank,
-      pitchAngle: f.pitchAngle,
-      heading: Math.atan2(fwd.x, -fwd.z),
-      ringIndex: this.course.index,
-      elapsed: this.course.elapsed,
-      ringBearing,
-      ringDistance,
-    };
+  syncAircraft() {
+    const g = this.aircraft.group;
+    g.position.copy(this.flight.position);
+    g.quaternion.copy(this.flight.quaternion);
   }
 
   updateFps(dt) {

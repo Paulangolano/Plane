@@ -64,6 +64,34 @@ test('chase camera toggles with V', async () => {
   await waitFor(page, () => window.__skyreach.viewMode === 'cockpit');
 });
 
+test('SR22 keyboard controls: flaps, parking brake, assists, then back to the jet', async () => {
+  const { page } = ctx;
+  await page.click('#show-menu');
+  await page.check('input[value="sr22"]');
+  assert.equal(await game(page, () => window.__skyreach.aircraft.id), 'sr22');
+  await page.click('#play-desktop');
+  await page.keyboard.press('BracketRight');
+  await waitFor(page, () => window.__skyreach.flight.flapsTarget === 0.5);
+  await page.keyboard.press('BracketLeft');
+  await waitFor(page, () => window.__skyreach.flight.flapsTarget === 0);
+  await page.keyboard.press('KeyP');
+  await waitFor(page, () => window.__skyreach.flight.parkingBrake === true);
+  await page.keyboard.press('KeyO');
+  await waitFor(page, () => window.__skyreach.flight.assists === false);
+  await page.keyboard.press('KeyO');
+  await waitFor(page, () => window.__skyreach.flight.assists === true);
+  // The avionics render real numbers (no NaN) on the displays.
+  const pfd = await game(page, () => {
+    const c = window.__skyreach.aircraft.group.getObjectByName('PFD').material.map.image;
+    return c.width > 0;
+  });
+  assert.ok(pfd);
+  await page.click('#show-menu');
+  await page.check('input[value="jet"]');
+  assert.equal(await game(page, () => window.__skyreach.aircraft.id), 'jet');
+  await page.click('#play-desktop');
+});
+
 test('no runtime errors during flight', async () => {
   assert.deepEqual(ctx.errors, []);
 });

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { WorldData } from '../../src/world/worldData.js';
-import { COURSE, WORLD } from '../../src/config.js';
+import { WorldData } from '../../../src/world/worldData.js';
+import { COURSE, WORLD } from '../../../src/config.js';
 
 const world = new WorldData();
 

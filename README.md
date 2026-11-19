@@ -1,6 +1,11 @@
 # Skyreach VR
 
-An arcade VR flight sim for **Meta Quest 2** (and Quest 3 / Pro). Take off from an island airstrip, race a jet through 12 rings across a tropical archipelago, then land back on the runway for the best time.
+A VR flight sim for **Meta Quest 2** (and Quest 3 / Pro). Take off from an island airstrip, race through 12 rings across a tropical archipelago, then land back on the runway for the best time.
+
+Pick your aircraft on the start screen:
+
+- **Arcade Jet**: fast and forgiving, with an afterburner.
+- **SR22-class (realistic)**: modelled on the Cirrus SR22 G7+ (310 hp piston single). It has real performance numbers, a side yoke and power lever, flaps, trim, a glass cockpit, an autopilot, a whole-aircraft parachute and a Safe Return–style emergency autoland. It uses no manufacturer branding.
 
 The game comes in two versions that share the same design, physics and world:
 
@@ -9,7 +14,8 @@ The game comes in two versions that share the same design, physics and world:
 | How you play | Open a link in the Quest Browser and press **Enter VR** | Install an APK on the headset (sideload) |
 | Setup | None on the headset | Unity 6 on a PC + Quest developer mode |
 | Graphics ceiling | Good (Three.js, tuned for 72 fps) | Highest (native Vulkan app) |
-| Tested here | ✅ 43 automated tests incl. an emulated Quest 2 | ✅ compiled + 25 logic tests outside Unity; not run in the editor |
+| Aircraft | Arcade Jet + SR22-class | Arcade Jet (SR22 port in progress) |
+| Tested here | ✅ 88 automated tests incl. an emulated Quest 2 | ✅ compiled + 25 logic tests outside Unity; not run in the editor |
 
 Both versions generate **exactly the same islands and ring course** (same seeded random numbers, cross-checked by a test).
 
@@ -18,35 +24,45 @@ Both versions generate **exactly the same islands and ring course** (same seeded
 | Flying through the archipelago | Chase view (desktop) |
 |---|---|
 | ![Cockpit view in flight](docs/images/vr-cockpit-flying.png) | ![Chase view over the islands](docs/images/chase-view-islands.png) |
+| **SR22-class cockpit in VR** | **SR22 on autopilot (HDG + ALT)** |
+| ![SR22 cockpit with PFD and MFD](docs/images/sr22-cockpit-vr.png) | ![SR22 flying on autopilot](docs/images/sr22-autopilot-desktop.png) |
 
 ## Features
 
-- Seated cockpit with a **grabbable flight stick and throttle** (squeeze the grip buttons), or thumbstick flying
-- Arcade flight model: takeoff, climbing costs speed, stalls, afterburner, landing and crashing
+- Seated cockpit with **grabbable controls** (squeeze the grip buttons) and **fingertip-pressable panel buttons**, plus thumbstick flying
 - Procedural archipelago: 9 islands with beaches, forests, rocky peaks and snow, turquoise lagoons, clouds, airstrip with lights and a control tower
-- Ring race with timer, best-time record, ring numbers and a "next ring" arrow on the dashboard
-- Glass-cockpit display: airspeed, altitude, artificial horizon, heading, throttle, boost, rings, lap time
+- Ring race with timer, best time per aircraft, ring numbers and a "next ring" pointer
 - Comfort options: comfort vignette (4 levels), automatic seat calibration, re-centre button
-- Synthesised engine, wind, chime and crash sounds (no audio files), controller haptics
+- Synthesised engine, wind, chime, stall-horn, autopilot and crash sounds (no audio files), plus controller vibration
+
+### SR22-class: what's modelled
+
+| | |
+|---|---|
+| **Flight physics** | Lift and drag from angle of attack, flaps and air density. Book numbers come out of the physics: stall at 70/65/60 kt (flaps up/50%/100%), lift-off around 72 kt, about 1,250 fpm climb at Vy 108 kt, 165–180 kt full power, roughly 9:1 glide. Stalls with wing drop, prop torque, stable phugoid, hard landings, never-exceed overspeed |
+| **Controls** | Left-hand **side yoke** (pull = nose up, sideways = roll), right-hand **power lever**, **flaps** UP/50%/100%, **pitch and roll trim hat**, **differential toe brakes** (free-castering nosewheel), parking brake |
+| **Glass cockpit** | **PFD**: attitude, speed tape with colour bands, altitude tape with selected-altitude bug, VSI, HSI with heading bug, autopilot modes, flaps/trim, STALL/ESP alerts. **MFD**: track-up moving map with runway, rings and range ring, plus an engine page (RPM, % power, manifold, fuel flow and quantity, G-load) |
+| **Autopilot** | AP, HDG (with heading bug), ALT hold, VS with altitude capture, and the blue **LVL** button (wings level, stop the climb or descent). Disconnects if you take the controls or stall |
+| **Emergency** | Overhead **parachute handle**: grab it and pull down (works up to its speed limit, about 1,700 fpm descent). Overhead **Safe Return** button: press and hold, and the aircraft flies itself to the runway, lands, brakes and shuts down |
+| **Assists** (toggle) | Envelope protection (keeps you out of stalls, steep banks and overspeed), yaw damper, rudder nosewheel steering |
 
 ## Controls (Quest Touch)
 
-| Control | Action |
-|---|---|
-| **Right grip** (hold) + move hand | Grab the flight stick: pull back = nose up, left/right = roll |
-| **Right thumbstick** | Pitch and roll (if you prefer not to grab) |
-| **Left grip** (hold) + push/pull | Grab the throttle |
-| **Left thumbstick** ↑↓ / ←→ | Throttle / rudder |
-| **Right trigger** | Afterburner |
-| **Left trigger** | Wheel brakes |
-| **A** | Restart (press twice when airborne) |
-| **B** or **X** | Cycle comfort vignette: Off / Light / Medium / Strong |
-| **Y** | Mute |
-| **Click left thumbstick** | Re-centre your seat |
+| | Arcade Jet | SR22-class |
+|---|---|---|
+| **Grip (hold) + move hand** | Right: flight stick · Left: throttle | Left: side yoke · Right: power lever |
+| **Right thumbstick** | Pitch and roll | Pitch and roll |
+| **Left thumbstick** | Throttle ↑↓, rudder ←→ | Power ↑↓, rudder ←→ (the **trim hat** while holding the yoke) |
+| **Triggers** | Right: afterburner · Left: brakes | Left / right toe brakes |
+| **A / B** | Restart / comfort vignette | Flaps down / up |
+| **X / Y** | Comfort vignette / mute | Autopilot on-off / **hold** to restart |
+| **Fingertip** | – | Panel buttons: AP HDG ALT VS LVL, bugs, flaps, park brake, assists, comfort, sound |
+| **Overhead** | – | Pull the red parachute handle · hold the Safe Return button |
+| **Click left thumbstick** | Re-centre seat | Re-centre seat |
 
-**How to fly:** push the throttle fully forward, wait for 162 km/h, pull the stick back gently. Bank to turn and pull back a little in the turn. Fly through the gold ring. The white rings are the next ones, and the dashboard arrow points to the next ring.
+**Flying the SR22:** push the power lever fully forward and keep straight with gentle rudder. At 72 kt, ease the yoke back. Climb at about 108 kt, and use the trim hat to take the pressure off. To land, use flaps 100% below 110 kt, fly the approach at 80 kt, reduce power over the runway and flare.
 
-Keyboard (desktop / Unity editor): W/S pitch, A/D roll, Q/E rudder, Shift/Ctrl throttle, Space afterburner, B brakes, V chase camera, Enter restart.
+Keyboard keys for both aircraft are listed on the start screen (desktop testing: W/S/A/D, Shift/Ctrl, V for the chase camera, and more).
 
 ## Quick start
 
@@ -85,13 +101,16 @@ skyreach-vr/
 │   │   ├── main.js            boot, Enter VR button, optional headset emulator
 │   │   ├── config.js          all tuning values
 │   │   ├── core/              game loop, audio, noise, settings storage
-│   │   ├── aircraft/          flight model, jet + cockpit
+│   │   ├── aircraft/
+│   │   │   ├── jet/           arcade flight model, jet + cockpit, dashboard display
+│   │   │   ├── sr22/          realistic physics, autopilot, Safe Return, cockpit, glass avionics
+│   │   │   └── registry.js    the aircraft picker list
 │   │   ├── world/             world data, terrain, ocean, sky, clouds, rings
 │   │   ├── input/             Quest controllers, keyboard
-│   │   ├── ui/                dashboard HUD, messages, comfort vignette
+│   │   ├── ui/                messages, comfort vignette, formatting
 │   │   └── styles/
 │   └── tests/
-│       ├── unit/              flight physics, world, full-course autopilot (Node)
+│       ├── unit/              jet/, sr22/, world/: physics vs. real numbers, autopilot, autoland (Node)
 │       └── e2e/               browser tests incl. an emulated Quest 2 (Playwright + IWER)
 ├── unity/                     native Quest version (Unity 6, OpenXR)
 │   ├── Assets/Skyreach/

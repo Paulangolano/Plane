@@ -1,5 +1,5 @@
 import { Quaternion, Vector3, MathUtils } from 'three';
-import { FLIGHT } from '../config.js';
+import { FLIGHT } from '../../config.js';
 
 // Arcade flight model. Pure maths with no rendering, so it can be unit tested in Node.
 // Axis convention (Three.js): forward = -Z, up = +Y, right = +X.

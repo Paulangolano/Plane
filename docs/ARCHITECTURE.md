@@ -11,6 +11,20 @@ Both versions are split the same way: **pure logic** (no rendering, unit-testabl
           keyboard                (terrain height, runway) (course layout)
 ```
 
+## Aircraft
+
+Each aircraft lives in its own folder under `webxr/src/aircraft/` and exposes the same small interface to the game (`aircraft/registry.js` lists them):
+
+- `model`: the physics (`update(dt, input, sampleGround)`, position/quaternion, `takeoff`/`landed`/`crash` events)
+- `group`: its 3D model, with the pilot's eye at the origin
+- `layout`: how Quest controllers map to it. This covers which hand holds the stick/yoke and which holds the throttle/power lever, trigger and button actions, a trim hat, fingertip-pressable panel buttons (`pokeTargets`) and pullable handles (`grabTargets`)
+- `keyMap`: keyboard actions
+- `flightInput(dt, input)`: turns pilot input into control input (the SR22 inserts the autopilot and Safe Return here)
+- `handleAction(action)`: flaps, autopilot buttons, parachute, and so on
+- `update(dt, ctx)`: cockpit animation and instruments
+
+The SR22's logic is plain JavaScript with no rendering (`sr22Physics.js`, `autopilot.js`, `safeReturn.js`), so it is unit-tested headlessly against the real aircraft's numbers.
+
 ## Module map
 
 | Concern | WebXR (`webxr/src/`) | Unity (`unity/Assets/Skyreach/Scripts/`) |
@@ -18,13 +32,13 @@ Both versions are split the same way: **pure logic** (no rendering, unit-testabl
 | Tuning values | `config.js` | `Core/SkyreachConfig.cs` |
 | Seeded RNG + Perlin noise | `core/noise.js` | `Core/SkyreachNoise.cs` (bit-exact port) |
 | Islands, terrain height, ring layout | `world/worldData.js` | `World/WorldData.cs` |
-| Flight physics | `aircraft/flightModel.js` | `Aircraft/FlightModel.cs` |
+| Flight physics (jet) | `aircraft/jet/flightModel.js` | `Aircraft/FlightModel.cs` |
 | Ring crossing + timer | `world/rings.js` (`RaceCourse`) | `World/RaceCourse.cs` |
 | Terrain/runway/trees/ocean/clouds | `world/terrain.js`, `ocean.js`, `clouds.js`, `sky.js` | `World/WorldBuilder.cs` + `Shaders/` |
-| Jet + cockpit | `aircraft/jet.js` | `Aircraft/JetBuilder.cs` |
+| Jet + cockpit | `aircraft/jet/jetModel.js` | `Aircraft/JetBuilder.cs` |
 | Quest controllers | `input/xrInput.js` | `Input/XRRig.cs` |
 | Keyboard | `input/keyboardInput.js` | `Input/KeyboardInput.cs` |
-| Dashboard HUD | `ui/hud.js` (canvas texture) | `UI/CockpitHUD.cs` (world-space uGUI) |
+| Dashboard HUD | `aircraft/jet/jetHud.js` (canvas texture) | `UI/CockpitHUD.cs` (world-space uGUI) |
 | Messages / vignette | `ui/messages.js`, `ui/vignette.js` | `UI/MessagePanel.cs`, `UI/ComfortVignette.cs` |
 | Audio | `core/audio.js` (Web Audio) | `Core/GameAudio.cs` (`OnAudioFilterRead`) |
 | Main loop | `core/game.js` | `Core/GameManager.cs` |

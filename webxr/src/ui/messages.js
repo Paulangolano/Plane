@@ -57,6 +57,11 @@ export class MessagePanel {
     this.current = title;
   }
 
+  /** Move the panel to another aircraft. */
+  setParent(parent) {
+    parent.add(this.mesh);
+  }
+
   hide() {
     this.mesh.visible = false;
     this.current = null;

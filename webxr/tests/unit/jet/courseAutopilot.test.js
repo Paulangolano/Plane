@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Vector3, Quaternion, MathUtils } from 'three';
-import { FlightModel, GEAR_HEIGHT } from '../../src/aircraft/flightModel.js';
-import { WorldData } from '../../src/world/worldData.js';
-import { RaceCourse } from '../../src/world/rings.js';
-import { FLIGHT, COURSE } from '../../src/config.js';
+import { FlightModel, GEAR_HEIGHT } from '../../../src/aircraft/jet/flightModel.js';
+import { WorldData } from '../../../src/world/worldData.js';
+import { RaceCourse } from '../../../src/world/rings.js';
+import { FLIGHT, COURSE } from '../../../src/config.js';
 
 // A simple autopilot flies the real course from a standing start, using only the same
 // stick/throttle inputs a player has. Proves every ring is reachable and the course is

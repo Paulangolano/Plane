@@ -7,9 +7,15 @@
 - World: deterministic generation, flat runway with smooth shoulders, every island above the sea, rings clear the terrain, ring 1 and the last ring face along the runway, and no ring is met edge-on.
 - **Autopilot:** flies the real course from a standing start using only player inputs: takeoff, all 12 rings in order, no crash (lap ≈ 100 s).
 
+**SR22 unit tests** (`tests/unit/sr22/`):
+- Physics checked against the real aircraft's numbers: lift-off speed, stall speed at each flap setting, climb rate at Vy, full-power speed, glide ratio, hands-off stability, coordinated turns, trim, flap travel, envelope protection, stall with wing drop, landing, hard landing, parachute (deploy limits, descent rate, safe touchdown), overspeed, fuel exhaustion.
+- Autopilot: HDG onto the bug, ALT hold through a turn, VS climb with altitude capture, LVL recovery from a descending turn, disconnect in a stall.
+- **Safe Return** autoland from four starts (already on final, downwind heading away, low to the north-east, just after take-off). Each must land on the runway, stop near the centreline and shut the engine down.
+
 **Browser tests** (`tests/e2e/`, Playwright + software WebGL, a few minutes):
 - Desktop: start screen, Quest 2 performance budget (draw calls and triangles), keyboard takeoff, chase camera, no console errors.
 - Course: a real autopilot takeoff through ring 1, rings counted in order, finishing the course saves a best time, crash then restart.
+- **SR22 in VR on an emulated Quest 2**: pick it on the start screen; toe brakes; flaps via A/B and by fingertip on the panel; parking brake; grab the power lever to full; trim hat; take off by pulling the side yoke; AP/HDG/ALT/LVL by fingertip; press-and-hold Safe Return; pull the parachute handle; hold Y to restart.
 - **VR on an emulated Quest 2** (Meta IWER): Enter VR, stereo rendering, seat calibration, both controllers tracked, thumbstick throttle, grabbing the throttle and stick with the grip buttons, rolling with the grabbed stick, afterburner trigger, comfort vignette button, A-twice restart, re-centre button.
 
 If Playwright isn't installed globally, add it to the project first:

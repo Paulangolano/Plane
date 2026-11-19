@@ -62,17 +62,78 @@ export class GameAudio {
     if (this.master) this.master.gain.value = m ? 0 : 0.6;
   }
 
-  update({ throttle, speed, boosting, crashed }) {
+  /**
+   * @param {{throttle:number, speed:number, boosting?:boolean, crashed:boolean, profile?:'jet'|'prop', rpm?:number}} s
+   */
+  update({ throttle, speed, boosting = false, crashed, profile = 'jet', rpm: engineRpm = 0 }) {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
-    const rpm = crashed ? 0 : 0.25 + throttle * 0.75 + (boosting ? 0.25 : 0);
-    this.osc1.frequency.setTargetAtTime(45 + rpm * 85, t, 0.15);
-    this.osc2.frequency.setTargetAtTime(90 + rpm * 170, t, 0.15);
-    this.engineFilter.frequency.setTargetAtTime(250 + rpm * 1400, t, 0.15);
-    this.engineGain.gain.setTargetAtTime(crashed ? 0 : 0.08 + rpm * 0.12, t, 0.2);
+    if (profile === 'prop') {
+      // Six-cylinder piston engine (3 firing pulses per rev) and a three-blade prop (twice that, harmonically).
+      const r = engineRpm / 60;
+      const on = engineRpm > 50 && !crashed;
+      this.osc1.frequency.setTargetAtTime(Math.max(20, r * 3), t, 0.1);
+      this.osc2.frequency.setTargetAtTime(Math.max(30, r * 6), t, 0.1);
+      this.engineFilter.frequency.setTargetAtTime(180 + throttle * 900, t, 0.15);
+      this.engineGain.gain.setTargetAtTime(on ? 0.1 + throttle * 0.14 : 0, t, 0.25);
+    } else {
+      const rpm = crashed ? 0 : 0.25 + throttle * 0.75 + (boosting ? 0.25 : 0);
+      this.osc1.frequency.setTargetAtTime(45 + rpm * 85, t, 0.15);
+      this.osc2.frequency.setTargetAtTime(90 + rpm * 170, t, 0.15);
+      this.engineFilter.frequency.setTargetAtTime(250 + rpm * 1400, t, 0.15);
+      this.engineGain.gain.setTargetAtTime(crashed ? 0 : 0.08 + rpm * 0.12, t, 0.2);
+    }
     const wind = Math.min(1, speed / 170);
     this.windFilter.frequency.setTargetAtTime(400 + wind * 1800 + (boosting ? 600 : 0), t, 0.2);
     this.windGain.gain.setTargetAtTime(crashed ? 0 : wind * 0.35 + (boosting ? 0.15 : 0), t, 0.2);
+  }
+
+  /** Continuous stall warning horn. */
+  setStallHorn(on) {
+    if (!this.ctx) return;
+    if (!this.horn) {
+      this.horn = this.ctx.createOscillator();
+      this.horn.type = 'square';
+      this.horn.frequency.value = 520;
+      this.hornGain = this.ctx.createGain();
+      this.hornGain.gain.value = 0;
+      this.horn.connect(this.hornGain).connect(this.master);
+      this.horn.start();
+    }
+    this.hornGain.gain.setTargetAtTime(on ? 0.05 : 0, this.ctx.currentTime, 0.03);
+  }
+
+  /** Descending two-tone "autopilot disconnect" alert. */
+  apDisconnect() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    [880, 660].forEach((f, i) => {
+      const o = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      o.frequency.value = f;
+      g.gain.setValueAtTime(0.18, t + i * 0.22);
+      g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.22 + 0.2);
+      o.connect(g).connect(this.master);
+      o.start(t + i * 0.22);
+      o.stop(t + i * 0.22 + 0.22);
+    });
+  }
+
+  /** Parachute rocket + canopy opening. */
+  whoosh() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuffer(2.5);
+    const f = this.ctx.createBiquadFilter();
+    f.type = 'bandpass';
+    f.frequency.setValueAtTime(2500, t);
+    f.frequency.exponentialRampToValueAtTime(200, t + 2.3);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.6, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 2.5);
+    src.connect(f).connect(g).connect(this.master);
+    src.start();
   }
 
   chime(high = false) {

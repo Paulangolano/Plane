@@ -10,8 +10,8 @@
     "build": "vite build",
     "preview": "vite preview --host",
     "test": "npm run test:unit && npm run test:e2e",
-    "test:unit": "node --test \"tests/unit/*.test.js\"",
-    "test:e2e": "vite build && node --test --test-concurrency=1 --test-timeout=180000 \"tests/e2e/*.test.js\""
+    "test:unit": "node --test \"tests/unit/**/*.test.js\"",
+    "test:e2e": "vite build && node --test --test-concurrency=1 --test-timeout=900000 \"tests/e2e/*.test.js\""
   },
   "dependencies": {
     "three": "0.187.0"

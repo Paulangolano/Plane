@@ -43,6 +43,11 @@ Open the game with `?emulate=quest2` on the end of the address (for example `htt
 - Fixed foveated rendering, no shadows, no transparency on the ocean (lagoon colours are baked per vertex).
 - The HUD canvas redraws at 15 Hz, not every frame.
 
+## Aircraft
+
+- `src/aircraft/jet/`: the arcade jet
+- `src/aircraft/sr22/`: the realistic SR22-class aircraft. Performance data is in `sr22Data.js` (knots, feet and fpm on the displays, SI units internally)
+
 ## Tuning
 
 Speeds, turn rates, ring count, island count and so on are in [`src/config.js`](src/config.js). If you change them, mirror the change in `unity/Assets/Skyreach/Scripts/Core/SkyreachConfig.cs` so both versions stay identical.

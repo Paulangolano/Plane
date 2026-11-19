@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Vector3 } from 'three';
-import { FlightModel, GEAR_HEIGHT } from '../../src/aircraft/flightModel.js';
-import { WorldData } from '../../src/world/worldData.js';
-import { FLIGHT } from '../../src/config.js';
+import { FlightModel, GEAR_HEIGHT } from '../../../src/aircraft/jet/flightModel.js';
+import { WorldData } from '../../../src/world/worldData.js';
+import { FLIGHT } from '../../../src/config.js';
 
 const world = new WorldData();
 const ground = (x, z) => world.sampleGround(x, z);

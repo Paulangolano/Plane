@@ -163,3 +163,67 @@ button.secondary {
   background: transparent;
   color: var(--text);
 }
+
+.aircraft-picker {
+  border: 0;
+  padding: 0;
+  margin: 0 0 18px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+.aircraft-picker legend {
+  color: var(--muted);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 8px;
+}
+
+.aircraft {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+}
+
+.aircraft:has(input:checked) {
+  border-color: var(--accent);
+  background: rgba(255, 178, 26, 0.08);
+}
+
+.aircraft input,
+.assist input {
+  accent-color: var(--accent);
+  margin-top: 4px;
+}
+
+.aircraft b {
+  display: block;
+  font-size: 16px;
+}
+
+.aircraft small {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+  margin-top: 2px;
+}
+
+.assist {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+[data-for].off {
+  display: none;
+}

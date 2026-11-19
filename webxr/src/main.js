@@ -22,6 +22,33 @@ async function boot() {
   const desktopButton = document.getElementById('play-desktop');
   const vrNote = document.getElementById('vr-note');
 
+  // Aircraft picker + assists toggle, remembered between visits.
+  const radios = [...document.querySelectorAll('input[name="aircraft"]')];
+  const assists = document.getElementById('assists');
+  const helpText = document.getElementById('desktop-help-text');
+  const HELP = {
+    jet: 'W/S pitch · A/D roll · Shift/Ctrl throttle · Space boost · V camera · Enter restart',
+    sr22: 'W/S A/D Q/E fly · Shift/Ctrl power · [ ] flaps · T/G trim · Z AP · L LVL · hold 9 chute · hold 0 Safe Return · V camera',
+  };
+  const showFor = (id) => {
+    document.querySelectorAll('[data-for]').forEach((el) => el.classList.toggle('off', el.dataset.for !== id));
+    helpText.textContent = HELP[id];
+  };
+  radios.forEach((r) => {
+    r.checked = r.value === game.aircraft.id;
+    r.addEventListener('change', () => {
+      game.setAircraft(r.value);
+      showFor(r.value);
+    });
+  });
+  assists.checked = game.settings.assists !== false;
+  assists.addEventListener('change', () => {
+    game.settings.assists = assists.checked;
+    if (game.aircraft.id === 'sr22') game.aircraft.model.assists = assists.checked;
+    game.context().saveSettings();
+  });
+  showFor(game.aircraft.id);
+
   let supported = false;
   try {
     supported = !!navigator.xr && (await navigator.xr.isSessionSupported('immersive-vr'));
