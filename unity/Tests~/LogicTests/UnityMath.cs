@@ -20,6 +20,7 @@ namespace UnityEngine
         public static Vector3 operator /(Vector3 a, float d) => new Vector3(a.x / d, a.y / d, a.z / d);
         public static float Dot(Vector3 a, Vector3 b) => a.x * b.x + a.y * b.y + a.z * b.z;
         public static Vector3 Cross(Vector3 a, Vector3 b) => new Vector3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
+        public float sqrMagnitude => x * x + y * y + z * z;
         public float magnitude => (float)Math.Sqrt(x * x + y * y + z * z);
         public Vector3 normalized => magnitude > 1e-6f ? this / magnitude : zero;
         public static float Distance(Vector3 a, Vector3 b) => (a - b).magnitude;
@@ -51,6 +52,21 @@ namespace UnityEngine
             return v + q.w * t + Vector3.Cross(u, t);
         }
         public static Quaternion Inverse(Quaternion q) => new Quaternion(-q.x, -q.y, -q.z, q.w);
+        public static Quaternion Slerp(Quaternion a, Quaternion b, float t)
+        {
+            t = Math.Max(0, Math.Min(1, t));
+            float dot = a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+            if (dot < 0) { b = new Quaternion(-b.x, -b.y, -b.z, -b.w); dot = -dot; }
+            if (dot > 0.9995f)
+            {
+                var r = new Quaternion(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t, a.w + (b.w - a.w) * t);
+                float m = (float)Math.Sqrt(r.x * r.x + r.y * r.y + r.z * r.z + r.w * r.w);
+                return new Quaternion(r.x / m, r.y / m, r.z / m, r.w / m);
+            }
+            double th = Math.Acos(dot), sn = Math.Sin(th);
+            float wa = (float)(Math.Sin((1 - t) * th) / sn), wb = (float)(Math.Sin(t * th) / sn);
+            return new Quaternion(a.x * wa + b.x * wb, a.y * wa + b.y * wb, a.z * wa + b.z * wb, a.w * wa + b.w * wb);
+        }
         public static float Angle(Quaternion a, Quaternion b)
         {
             float d = Math.Min(Math.Abs(a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w), 1f);
@@ -73,5 +89,14 @@ namespace UnityEngine
         public static float Atan2(float y, float x) => (float)Math.Atan2(y, x);
         public static float Asin(float a) => (float)Math.Asin(a);
         public static int Min(int a, int b) => Math.Min(a, b);
+        public static int Clamp(int v, int a, int b) => v < a ? a : v > b ? b : v;
+        public static float Sin(float a) => (float)Math.Sin(a);
+        public static float Cos(float a) => (float)Math.Cos(a);
+        public static float Pow(float a, float b) => (float)Math.Pow(a, b);
+        public static float Sign(float a) => a >= 0 ? 1f : -1f;
+        public static float Round(float a) => (float)Math.Round(a);
+        public static int RoundToInt(float a) => (int)Math.Round(a);
+        public static int CeilToInt(float a) => (int)Math.Ceiling(a);
+        public static float Lerp(float a, float b, float t) => a + (b - a) * Clamp01(t);
     }
 }

@@ -5,30 +5,38 @@ using UnityEngine.XR;
 namespace Skyreach
 {
     /// <summary>
-    /// The pilot's seat: head camera and two hands, tracked through Unity's XR input API
-    /// (works with OpenXR on Quest, no extra toolkits needed).
-    ///
-    ///  Right hand: grip = grab the flight stick (or thumbstick), trigger = afterburner,
-    ///              A = restart, B = comfort vignette.
-    ///  Left hand:  grip = grab the throttle (or thumbstick up/down), stick left/right = rudder,
-    ///              trigger = brakes, X = comfort vignette, Y = mute, stick click = re-centre seat.
+    /// The pilot's seat: head camera and two hands, tracked through Unity's XR input API (OpenXR on Quest).
+    /// Controls follow the active aircraft's <see cref="ControlLayout"/>: grabbing a stick/yoke and a
+    /// throttle/power lever, thumbstick fallbacks, a trim hat, triggers, tap and hold buttons,
+    /// fingertip "poke" buttons and pullable handles (port of webxr/src/input/xrInput.js).
     /// </summary>
     public sealed class XRRig : MonoBehaviour
     {
         const float GrabThreshold = 0.6f;
-        const float StickRange = 0.09f;    // metres of hand travel for full stick deflection
-        const float ThrottleRange = 0.2f;  // metres of hand travel from idle to full throttle
         const float NearDistance = 0.16f;
+        const float FingertipReach = 0.04f;
 
         public Camera Head;
         public Transform LeftHand, RightHand;
         public Transform CockpitSpace;
+        public ControlLayout Layout;
 
         Transform leftFingers, rightFingers;
-        bool stickGrab, throttleGrab;
-        Vector3 stickOrigin, throttleOrigin;
-        float throttleStart;
+        readonly Dictionary<XRNode, Grab> grabs = new Dictionary<XRNode, Grab>();
         readonly Dictionary<string, bool> prevButtons = new Dictionary<string, bool>();
+        readonly Dictionary<string, float> holdTimes = new Dictionary<string, float>();
+        readonly Dictionary<string, float> touchTimes = new Dictionary<string, float>();
+        static readonly InputFeatureUsage<Vector3> PointerPosition = new InputFeatureUsage<Vector3>("PointerPosition");
+        static readonly InputFeatureUsage<Quaternion> PointerRotation = new InputFeatureUsage<Quaternion>("PointerRotation");
+
+        sealed class Grab
+        {
+            public string Kind; // stick | throttle | target
+            public Vector3 Origin;
+            public float Start;
+            public GrabTarget Target;
+            public bool Fired;
+        }
 
         public static bool Active => XRSettings.isDeviceActive;
 
@@ -40,6 +48,15 @@ namespace Skyreach
             RightHand = CreateHand("RightHand", mats, SkyreachMaterials.Hex(0x3a8dde), out rightFingers);
             Application.onBeforeRender += UpdatePoses;
             SetSeatedTracking();
+        }
+
+        public void SetLayout(ControlLayout layout, Transform cockpitSpace)
+        {
+            Layout = layout;
+            CockpitSpace = cockpitSpace;
+            grabs.Clear();
+            holdTimes.Clear();
+            touchTimes.Clear();
         }
 
         void OnDestroy() => Application.onBeforeRender -= UpdatePoses;
@@ -96,7 +113,6 @@ namespace Skyreach
             hand.localRotation = rot;
         }
 
-        /// <summary>Head pose relative to the rig, for seat calibration.</summary>
         public void GetHeadLocal(out Vector3 pos, out Quaternion rot)
         {
             UpdatePoses();
@@ -104,77 +120,173 @@ namespace Skyreach
             rot = Head.transform.localRotation;
         }
 
-        bool Pressed(InputDevice dev, InputFeatureUsage<bool> usage, string key)
+        bool Pressed(InputDevice dev, InputFeatureUsage<bool> usage, string key, out bool down)
         {
-            dev.TryGetFeatureValue(usage, out bool now);
+            dev.TryGetFeatureValue(usage, out down);
             prevButtons.TryGetValue(key, out bool was);
-            prevButtons[key] = now;
-            return now && !was;
+            prevButtons[key] = down;
+            return down && !was;
+        }
+
+        /// <summary>Index fingertip in the aircraft's frame: a few cm along the controller's pointing ray.</summary>
+        Vector3 Fingertip(XRNode node, InputDevice dev, Transform hand)
+        {
+            if (dev.TryGetFeatureValue(PointerPosition, out var pp) && dev.TryGetFeatureValue(PointerRotation, out var pr))
+                return CockpitSpace.InverseTransformPoint(transform.TransformPoint(pp + pr * Vector3.forward * FingertipReach));
+            return CockpitSpace.InverseTransformPoint(hand.TransformPoint(new Vector3(0, -0.02f, 0.08f)));
         }
 
         public bool ReadInput(float dt, InputState s)
         {
-            if (!Active) return false;
+            if (!Active || Layout == null) return false;
             UpdatePoses();
-            var right = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
-            var left = InputDevices.GetDeviceAtXRNode(XRNode.LeftHand);
             s.StickGrabbed = s.ThrottleGrabbed = s.StickNear = s.ThrottleNear = false;
+            s.TrimRate = s.RollTrimRate = 0;
+            s.CapsPull = 0;
+            s.Touching.Clear();
+            bool any = false;
 
-            if (right.isValid)
+            foreach (var node in new[] { XRNode.LeftHand, XRNode.RightHand })
             {
-                right.TryGetFeatureValue(CommonUsages.grip, out float squeeze);
-                Vector3 pos = CockpitSpace.InverseTransformPoint(RightHand.position);
-                s.StickNear = Vector3.Distance(pos, CockpitLayout.StickGrip) < NearDistance;
+                var dev = InputDevices.GetDeviceAtXRNode(node);
+                if (!dev.isValid) continue;
+                any = true;
+                string side = node == XRNode.LeftHand ? "left" : "right";
+                Transform handT = node == XRNode.LeftHand ? LeftHand : RightHand;
+                dev.TryGetFeatureValue(CommonUsages.grip, out float squeeze);
+                Vector3 pos = CockpitSpace.InverseTransformPoint(handT.position);
+                if (Layout.StickHand == node) s.StickNear = Vector3.Distance(pos, Layout.StickGrip) < NearDistance;
+                if (Layout.ThrottleHand == node) s.ThrottleNear = Vector3.Distance(pos, Layout.ThrottleGrip) < NearDistance;
+
+                // Start / end grabs
+                grabs.TryGetValue(node, out var grab);
                 if (squeeze > GrabThreshold)
                 {
-                    if (!stickGrab) { stickGrab = true; stickOrigin = pos; Pulse(XRNode.RightHand, 0.25f, 0.03f); }
-                    Vector3 d = pos - stickOrigin;
-                    s.Roll = Mathf.Clamp(d.x / StickRange, -1, 1);
-                    s.Pitch = Mathf.Clamp(-d.z / StickRange, -1, 1); // pulling toward you (-Z) = nose up
-                    s.StickGrabbed = true;
+                    if (grab == null)
+                    {
+                        var target = Layout.GrabTargets.Find(t => Vector3.Distance(pos, t.Position) < t.Radius);
+                        if (target != null) grab = new Grab { Kind = "target", Target = target, Origin = pos };
+                        else if (Layout.StickHand == node) grab = new Grab { Kind = "stick", Origin = pos };
+                        else if (Layout.ThrottleHand == node) grab = new Grab { Kind = "throttle", Origin = pos, Start = s.Throttle };
+                        if (grab != null)
+                        {
+                            grabs[node] = grab;
+                            Pulse(node, 0.25f, 0.03f);
+                        }
+                    }
                 }
                 else
                 {
-                    stickGrab = false;
-                    right.TryGetFeatureValue(CommonUsages.primary2DAxis, out Vector2 axis);
-                    s.Roll = InputState.Deadzone(axis.x);
-                    s.Pitch = InputState.Deadzone(-axis.y); // pull back = nose up
+                    grabs.Remove(node);
+                    grab = null;
                 }
-                right.TryGetFeatureValue(CommonUsages.trigger, out float trig);
-                s.Boost = trig > 0.5f;
-                if (Pressed(right, CommonUsages.primaryButton, "A")) s.Restart = true;
-                if (Pressed(right, CommonUsages.secondaryButton, "B")) s.CycleComfort = true;
-                rightFingers.localRotation = Quaternion.Euler(squeeze * 70f, 0, 0);
-            }
 
-            if (left.isValid)
-            {
-                left.TryGetFeatureValue(CommonUsages.grip, out float squeeze);
-                Vector3 pos = CockpitSpace.InverseTransformPoint(LeftHand.position);
-                s.ThrottleNear = Vector3.Distance(pos, CockpitLayout.ThrottleGrip) < NearDistance;
-                if (squeeze > GrabThreshold)
+                dev.TryGetFeatureValue(CommonUsages.primary2DAxis, out Vector2 axis);
+                if (grab?.Kind == "stick")
                 {
-                    if (!throttleGrab) { throttleGrab = true; throttleOrigin = pos; throttleStart = s.Throttle; Pulse(XRNode.LeftHand, 0.25f, 0.03f); }
-                    float push = pos.z - throttleOrigin.z; // forward = more power
-                    s.Throttle = Mathf.Clamp01(throttleStart + push / ThrottleRange);
+                    Vector3 d = pos - grab.Origin;
+                    s.Roll = Mathf.Clamp(d.x / Layout.StickRange, -1, 1);
+                    s.Pitch = Mathf.Clamp(-d.z / Layout.StickRange, -1, 1); // pulling toward you (-Z) = nose up
+                    s.StickGrabbed = true;
+                    if (Layout.TrimHat)
+                    {
+                        s.TrimRate = InputState.Deadzone(-axis.y); // hat back = nose-up trim
+                        s.RollTrimRate = InputState.Deadzone(axis.x);
+                    }
+                }
+                else if (grab?.Kind == "throttle")
+                {
+                    s.Throttle = Mathf.Clamp01(grab.Start + (pos.z - grab.Origin.z) / Layout.ThrottleRange);
                     s.ThrottleGrabbed = true;
                 }
-                else
+                else if (grab?.Kind == "target")
                 {
-                    throttleGrab = false;
-                    left.TryGetFeatureValue(CommonUsages.primary2DAxis, out Vector2 axis);
-                    s.Throttle = Mathf.Clamp01(s.Throttle + InputState.Deadzone(axis.y) * 0.55f * dt);
+                    float pull = Mathf.Max(0, grab.Origin.y - pos.y);
+                    s.CapsPull = Mathf.Min(pull, 0.2f);
+                    if (!grab.Fired && pull > grab.Target.PullDistance)
+                    {
+                        grab.Fired = true;
+                        s.Fire(grab.Target.Action);
+                        Pulse(node, 1, 0.2f);
+                    }
                 }
-                left.TryGetFeatureValue(CommonUsages.primary2DAxis, out Vector2 stick);
-                s.Yaw = InputState.Deadzone(stick.x);
-                left.TryGetFeatureValue(CommonUsages.trigger, out float trig);
-                s.Brake = trig > 0.5f;
-                if (Pressed(left, CommonUsages.secondaryButton, "Y")) s.ToggleMute = true;
-                if (Pressed(left, CommonUsages.primaryButton, "X")) s.CycleComfort = true;
-                if (Pressed(left, CommonUsages.primary2DAxisClick, "LStick")) s.Recenter = true;
-                leftFingers.localRotation = Quaternion.Euler(squeeze * 70f, 0, 0);
+
+                // Thumbsticks: right flies (unless a hand is on the stick), left = power + rudder
+                // (unless it's the trim hat).
+                bool usingHat = grab?.Kind == "stick" && Layout.TrimHat;
+                bool stickHeld = grabs.TryGetValue(Layout.StickHand, out var sg) && sg.Kind == "stick";
+                if (node == XRNode.RightHand && !usingHat && !stickHeld)
+                {
+                    s.Roll = InputState.Deadzone(axis.x);
+                    s.Pitch = InputState.Deadzone(-axis.y);
+                }
+                if (node == XRNode.LeftHand && !usingHat)
+                {
+                    bool throttleHeld = grabs.TryGetValue(Layout.ThrottleHand, out var tg) && tg.Kind == "throttle";
+                    if (!throttleHeld) s.Throttle = Mathf.Clamp01(s.Throttle + InputState.Deadzone(axis.y) * 0.55f * dt);
+                    s.Yaw = InputState.Deadzone(axis.x);
+                }
+
+                // Triggers
+                dev.TryGetFeatureValue(CommonUsages.trigger, out float trig);
+                string trigAction = node == XRNode.LeftHand ? Layout.LeftTrigger : Layout.RightTrigger;
+                if (trigAction == "boost") s.Boost = trig > 0.5f;
+                else if (trigAction == "brake") s.Brake = trig > 0.5f;
+                else if (trigAction == "brakeLeft") s.BrakeLeft = trig;
+                else if (trigAction == "brakeRight") s.BrakeRight = trig;
+
+                // Buttons: tap and hold actions
+                Button(dev, side, "primary", CommonUsages.primaryButton, dt, s, node);
+                Button(dev, side, "secondary", CommonUsages.secondaryButton, dt, s, node);
+                Button(dev, side, "stick", CommonUsages.primary2DAxisClick, dt, s, node);
+
+                // Fingertip pokes on cockpit buttons
+                if (grab == null && Layout.PokeTargets.Count > 0)
+                {
+                    Vector3 tip = Fingertip(node, dev, handT);
+                    foreach (var t in Layout.PokeTargets)
+                    {
+                        string key = side + "-" + t.Id;
+                        if (Vector3.Distance(tip, t.Position) < t.Radius)
+                        {
+                            s.Touching.Add(t.Id);
+                            if (!touchTimes.ContainsKey(key))
+                            {
+                                touchTimes[key] = 0;
+                                if (t.Hold <= 0) { s.Fire(t.Action); Pulse(node, 0.4f, 0.04f); }
+                            }
+                            else
+                            {
+                                float before = touchTimes[key];
+                                touchTimes[key] = before + dt;
+                                if (t.Hold > 0 && before < t.Hold && touchTimes[key] >= t.Hold) { s.Fire(t.Action); Pulse(node, 0.9f, 0.15f); }
+                            }
+                        }
+                        else touchTimes.Remove(key);
+                    }
+                }
+
+                var fingers = node == XRNode.LeftHand ? leftFingers : rightFingers;
+                fingers.localRotation = Quaternion.Euler(squeeze * 70f, 0, 0);
             }
-            return right.isValid || left.isValid;
+            return any;
+        }
+
+        void Button(InputDevice dev, string side, string name, InputFeatureUsage<bool> usage, float dt, InputState s, XRNode node)
+        {
+            string key = side + "." + name;
+            bool tapped = Pressed(dev, usage, key, out bool down);
+            if (tapped && Layout.Buttons.TryGetValue(key, out var action)) s.Fire(action);
+            if (Layout.HoldButtons.TryGetValue(key, out var hold))
+            {
+                if (down)
+                {
+                    holdTimes.TryGetValue(key, out float before);
+                    holdTimes[key] = before + dt;
+                    if (before < hold.seconds && holdTimes[key] >= hold.seconds) { s.Fire(hold.action); Pulse(node, 0.8f, 0.12f); }
+                }
+                else holdTimes[key] = 0;
+            }
         }
 
         public void Pulse(XRNode node, float amplitude, float seconds)

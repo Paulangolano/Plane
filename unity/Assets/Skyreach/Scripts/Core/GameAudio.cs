@@ -15,6 +15,9 @@ namespace Skyreach
 
         // Shared with the audio thread
         volatile float rpm, wind, engineGain, windGain, master = 0.6f;
+        volatile bool propProfile, stallHorn;
+        double hornPhase;
+        AudioClip apClip, whooshClip;
         double phase1, phase2;
         float lp1, lp2, bp1, bp2;
         uint noiseSeed = 22222;
@@ -41,6 +44,8 @@ namespace Skyreach
             chimeLow = MakeChime(new[] { 660f, 880f });
             chimeHigh = MakeChime(new[] { 784f, 988f, 1175f, 1568f });
             crashClip = MakeCrash();
+            apClip = MakeTones(new[] { 880f, 660f }, 0.22f);
+            whooshClip = MakeWhoosh();
         }
 
         public void SetMuted(bool muted)
@@ -49,9 +54,12 @@ namespace Skyreach
             if (oneShots) oneShots.volume = muted ? 0 : 1;
         }
 
-        public void Tick(float throttle, float speed, bool boosting, bool crashed)
+        /// <param name="profile">"jet" or "prop"</param>
+        /// <param name="engineRpm">propeller RPM for the piston engine sound</param>
+        public void Tick(float throttle, float speed, bool boosting, bool crashed, string profile = "jet", float engineRpm = 0)
         {
-            float targetRpm = crashed ? 0 : 0.25f + throttle * 0.75f + (boosting ? 0.25f : 0);
+            propProfile = profile == "prop";
+            float targetRpm = crashed ? 0 : propProfile ? engineRpm / 2700f : 0.25f + throttle * 0.75f + (boosting ? 0.25f : 0);
             float k = Mathf.Min(1, Time.deltaTime * 6);
             rpm += (targetRpm - rpm) * k;
             float w = Mathf.Min(1, speed / 170f);
@@ -64,6 +72,12 @@ namespace Skyreach
 
         public void Crash() => oneShots.PlayOneShot(crashClip);
 
+        public void ApDisconnect() => oneShots.PlayOneShot(apClip);
+
+        public void Whoosh() => oneShots.PlayOneShot(whooshClip);
+
+        public void SetStallHorn(bool on) => stallHorn = on;
+
         float Noise()
         {
             noiseSeed ^= noiseSeed << 13;
@@ -75,7 +89,10 @@ namespace Skyreach
         // Runs on the audio thread.
         void OnAudioFilterRead(float[] data, int channels)
         {
-            float f1 = 45 + rpm * 85, f2 = 90 + rpm * 170;
+            // Jet: low turbine rumble. Prop: six-cylinder firing pulses (3 per rev) and their harmonic.
+            float f1 = propProfile ? Mathf.Max(20, rpm * 2700 / 60 * 3) : 45 + rpm * 85;
+            float f2 = propProfile ? Mathf.Max(30, rpm * 2700 / 60 * 6) : 90 + rpm * 170;
+            bool horn = stallHorn;
             float cutoff = 250 + rpm * 1400;
             float a = Mathf.Clamp01(2 * Mathf.PI * cutoff / sampleRate);
             float windCut = 400 + wind * 1800;
@@ -95,6 +112,11 @@ namespace Skyreach
                 bp1 += wa * (n - bp1);
                 bp2 += wa * 0.15f * (bp1 - bp2);
                 float sample = (lp2 * engineGain + (bp1 - bp2) * windGain) * master;
+                if (horn)
+                {
+                    hornPhase = (hornPhase + 520.0 / sampleRate) % 1.0;
+                    sample += (hornPhase < 0.5 ? 0.05f : -0.05f) * master;
+                }
                 for (int c = 0; c < channels; c++) data[i + c] = sample * data[i + c];
             }
         }
@@ -114,6 +136,38 @@ namespace Skyreach
                 }
             }
             var clip = AudioClip.Create("Chime", len, 1, sampleRate, false);
+            clip.SetData(buf, 0);
+            return clip;
+        }
+
+        AudioClip MakeTones(float[] notes, float each)
+        {
+            int len = (int)(sampleRate * each * notes.Length);
+            var buf = new float[len];
+            for (int i = 0; i < len; i++)
+            {
+                int n = Mathf.Min(notes.Length - 1, (int)(i / (sampleRate * each)));
+                float t = i / (float)sampleRate - n * each;
+                buf[i] = Mathf.Sin(2 * Mathf.PI * notes[n] * t) * 0.18f * Mathf.Exp(-t * 8);
+            }
+            var clip = AudioClip.Create("Tones", len, 1, sampleRate, false);
+            clip.SetData(buf, 0);
+            return clip;
+        }
+
+        AudioClip MakeWhoosh()
+        {
+            int len = (int)(sampleRate * 2.5f);
+            var buf = new float[len];
+            float lp = 0;
+            for (int i = 0; i < len; i++)
+            {
+                float t = i / (float)sampleRate;
+                float a = Mathf.Clamp01(2 * Mathf.PI * Mathf.Lerp(2500, 200, t / 2.3f) / sampleRate);
+                lp += a * (Noise() - lp);
+                buf[i] = lp * 1.5f * Mathf.Exp(-t * 1.5f);
+            }
+            var clip = AudioClip.Create("Whoosh", len, 1, sampleRate, false);
             clip.SetData(buf, 0);
             return clip;
         }

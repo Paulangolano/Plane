@@ -5,6 +5,7 @@ namespace UnityEngine.UI
     {
         public virtual Color color { get; set; }
         public bool raycastTarget { get; set; }
+        public new bool enabled { get; set; }
         public RectTransform rectTransform => null;
     }
     public class MaskableGraphic : Graphic { }
@@ -27,6 +28,8 @@ namespace UnityEngine.UI
         public HorizontalWrapMode horizontalOverflow { get; set; }
         public VerticalWrapMode verticalOverflow { get; set; }
     }
+    public class RawImage : MaskableGraphic { public Texture texture { get; set; } }
+    public class RectMask2D : MonoBehaviour { }
     public class Mask : MonoBehaviour { public bool showMaskGraphic { get; set; } }
     public class CanvasScaler : MonoBehaviour { public float dynamicPixelsPerUnit { get; set; } }
 }

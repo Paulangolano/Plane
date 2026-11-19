@@ -1,6 +1,6 @@
 # Skyreach VR: Unity version (native Quest app)
 
-A Unity 6 port of the WebXR game with the same physics, world and course. It runs as a native Quest app through **OpenXR**, using the **Built-in Render Pipeline** with custom single-pass-stereo shaders.
+A Unity 6 port of the WebXR game with the same physics, world, course and both aircraft: the **Arcade Jet** and the realistic **SR22-class** (side yoke, power lever, flaps, trim, toe brakes, glass cockpit, autopilot, parachute and Safe Return emergency autoland). It runs as a native Quest app through **OpenXR**, using the **Built-in Render Pipeline** with custom single-pass-stereo shaders.
 
 Everything (islands, ocean, jet, cockpit, HUD, sounds) is generated in code at startup. There are no models, textures or audio files to import, and the scene contains one GameObject.
 
@@ -25,7 +25,11 @@ Run these in order from the **Skyreach** menu at the top of the Unity window:
 | **2. Configure for Meta Quest** | Switches to Android; sets IL2CPP + ARM64, Vulkan, ASTC, Linear colour, min API 32, 4× MSAA; enables OpenXR with the *Meta Quest* feature and *Oculus Touch* controller profile, single-pass instanced. |
 | **3. Create Game Scene** | Creates `Assets/Skyreach/Scenes/Skyreach.unity` and adds it to the build. |
 
-Press **Play** to fly in the editor with the keyboard (W/S pitch, A/D roll, Shift/Ctrl throttle, Space boost, V chase camera, right-mouse-drag to look around).
+Press **Play** to fly in the editor with the keyboard: W/S pitch, A/D roll, Shift/Ctrl throttle, V chase camera, right-mouse-drag to look around. Press **1** for the Arcade Jet or **2** for the SR22.
+
+SR22 keys: `[` / `]` flaps, T/G trim, B brakes, `,` / `.` left/right brake, P parking brake, Z autopilot, H HDG, K ALT, U VS, L LVL, `-` / `=` heading bug, PgUp/PgDn altitude, hold 9 for the parachute, hold 0 for Safe Return, O assists.
+
+**Choosing the aircraft in VR:** while parked on the runway, a small **AIRCRAFT** panel floats ahead and to the right. Touch **ARCADE JET** or **SR22** with a fingertip. The choice is remembered.
 
 > If step 2 reports that OpenXR could not be configured automatically, do it by hand: **Edit → Project Settings → XR Plug-in Management → Android tab**, tick **OpenXR** and **Meta Quest feature group**. Then under **OpenXR → Interaction Profiles**, add **Oculus Touch Controller Profile**. Run step 2 again afterwards.
 
@@ -43,9 +47,11 @@ On the headset, the app is in **Library → Unknown Sources → Skyreach VR**. L
 Assets/Skyreach/
 ├── Scripts/                     (assembly: Skyreach.Runtime)
 │   ├── Core/        GameManager (main loop), config, seeded noise, synth audio, settings
-│   ├── Aircraft/    FlightModel (pure C# physics), JetBuilder (jet + cockpit meshes)
+│   ├── Aircraft/    Aircraft (shared interface), JetAircraft, FlightModel + JetBuilder (arcade jet)
+│   │   └── Sr22/    Sr22Data, Sr22Physics, Sr22Autopilot, Sr22SafeReturn (pure C#, tested),
+│   │                Sr22Builder (cockpit + exterior), Sr22Avionics (PFD + MFD), Sr22Aircraft (glue)
 │   ├── World/       WorldData (islands/terrain/course), WorldBuilder, RaceCourse, RingVisuals
-│   ├── Input/       XRRig (head + Touch controllers via OpenXR), KeyboardInput, InputState
+│   ├── Input/       XRRig (head + Touch controllers via OpenXR), ControlLayout, KeyboardInput, InputState
 │   ├── UI/          CockpitHUD, MessagePanel, ComfortVignette, UIFactory
 │   └── Rendering/   MeshFactory (procedural meshes), SkyreachMaterials
 ├── Shaders/         Lit, Ocean, Sky, Unlit, Vignette (all single-pass instanced stereo)
@@ -57,8 +63,8 @@ Tests~/              checks that run without Unity (ignored by Unity's importer)
 
 ## Tests
 
-- **In Unity:** *Window → General → Test Runner → EditMode → Run All*. These test the flight model, ring rules, terrain clearance, and an autopilot that flies the full course.
-- **Without Unity** (needs .NET 8 SDK and Node.js): `./Tests~/run-tests.sh`. This compiles every runtime script against Unity's engine reference assemblies, then runs 25 logic tests. One test checks that the Unity world is identical to the WebXR one.
+- **In Unity:** *Window → General → Test Runner → EditMode → Run All*. These test the jet flight model, ring rules, terrain clearance, an autopilot that flies the full course, SR22 stall speeds, take-off, the parachute, and a Safe Return landing.
+- **Without Unity** (needs .NET 8 SDK and Node.js): `./Tests~/run-tests.sh`. This compiles every runtime script against Unity's engine reference assemblies, then runs 38 logic tests. One test checks that the Unity world is identical to the WebXR one. The SR22 tests check stall speeds, take-off, climb, the parachute, the autopilot, and Safe Return landing on the runway from four starting points.
 
 ## Notes and limits
 

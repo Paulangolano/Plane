@@ -262,8 +262,9 @@ export function createSR22Model() {
     box(0.04, 0.55, 2.0, M.interior, x, -0.7, -0.05, cp); // lower wall
     box(0.04, 0.05, 1.9, M.paint, x, -0.4, -0.05, cp); // window sill
     box(0.03, 0.03, 1.2, M.interior, x, 0.32, 0.15, cp); // upper frame
-    const aPillar = box(0.03, 0.8, 0.03, M.interior, x, -0.02, -0.86, cp);
-    aPillar.rotation.x = -0.62;
+    // Windscreen pillar: from the glare shield's front corners back up to the roof.
+    const aPillar = box(0.03, 0.8, 0.03, M.interior, x, -0.02, -0.8, cp);
+    aPillar.rotation.x = 0.62;
     box(0.05, 0.7, 0.06, M.paint, x, -0.08, 0.72, cp); // B-pillar behind the seats
   }
   box(1.36, 0.03, 1.2, M.headliner, CX, 0.34, 0.15, cp); // roof
@@ -401,10 +402,11 @@ export function createSR22Model() {
       this.prop.visible = !fast;
       this.disc.visible = fast;
       // Control surfaces
-      this.ailerons[0].rotation.x = m.roll * 0.35;
-      this.ailerons[1].rotation.x = -m.roll * 0.35;
+      // Rolling right: right aileron trailing edge up, left down. Right rudder: trailing edge right.
+      this.ailerons[0].rotation.x = -m.roll * 0.35;
+      this.ailerons[1].rotation.x = m.roll * 0.35;
       this.elevator.rotation.x = -m.pitch * 0.4;
-      this.rudder.rotation.y = -m.yaw * 0.4;
+      this.rudder.rotation.y = m.yaw * 0.4;
       this.chute.visible = m.chute === 'inflating' || m.chute === 'deployed';
       if (this.chute.visible) {
         const s = Math.min(1, m.chuteT / SR22.chuteInflateTime);

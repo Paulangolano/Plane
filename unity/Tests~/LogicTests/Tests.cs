@@ -196,6 +196,8 @@ static class Tests
                 $"passed {passed}, crashed: {f.CrashReason}");
         }
 
+        Sr22Tests.Run(World, Check);
+
         Console.WriteLine($"\n{pass} passed, {fail} failed");
         return fail == 0 ? 0 : 1;
     }

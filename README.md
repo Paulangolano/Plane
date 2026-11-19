@@ -14,8 +14,8 @@ The game comes in two versions that share the same design, physics and world:
 | How you play | Open a link in the Quest Browser and press **Enter VR** | Install an APK on the headset (sideload) |
 | Setup | None on the headset | Unity 6 on a PC + Quest developer mode |
 | Graphics ceiling | Good (Three.js, tuned for 72 fps) | Highest (native Vulkan app) |
-| Aircraft | Arcade Jet + SR22-class | Arcade Jet (SR22 port in progress) |
-| Tested here | ✅ 88 automated tests incl. an emulated Quest 2 | ✅ compiled + 25 logic tests outside Unity; not run in the editor |
+| Aircraft | Arcade Jet + SR22-class | Arcade Jet + SR22-class |
+| Tested here | ✅ 88 automated tests incl. an emulated Quest 2 | ✅ compiled + 38 logic tests outside Unity; not run in the editor |
 
 Both versions generate **exactly the same islands and ring course** (same seeded random numbers, cross-checked by a test).
 

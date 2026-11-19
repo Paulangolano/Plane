@@ -6,11 +6,12 @@ using UnityEngine.InputSystem;
 
 namespace Skyreach
 {
-    public enum GameState { Ready, Flying, Crashed, Finished }
+    public enum GameState { Ready, Flying, Crashed, Finished, Ended }
 
     /// <summary>
     /// Builds the whole game at startup and runs the main loop (port of webxr/src/core/game.js).
     /// The scene only needs one GameObject with this component; use Skyreach ▸ Create Game Scene.
+    /// Aircraft: the arcade jet and the realistic SR22-class (keys 1 / 2, or the cockpit selector).
     /// </summary>
     public sealed class GameManager : MonoBehaviour
     {
@@ -21,29 +22,27 @@ namespace Skyreach
         public Shader UnlitShader;
         public Shader VignetteShader;
 
-        static readonly int TakeoffKmh = Mathf.RoundToInt(FlightConfig.TakeoffSpeed * 3.6f);
         static readonly Color Gold = SkyreachMaterials.Hex(0xffd23a);
 
         public GameState State { get; private set; } = GameState.Ready;
-        public FlightModel Flight { get; private set; }
+        public Aircraft Aircraft { get; private set; }
         public RaceCourse Course { get; private set; }
         public WorldData World { get; private set; }
 
         SkyreachMaterials mats;
-        Jet jet;
         Transform rig;
         Camera head;
         XRRig xr;
         readonly KeyboardInput keyboard = new KeyboardInput();
         readonly InputState input = new InputState();
         RingVisuals ringVisuals;
-        CockpitHUD hud;
         MessagePanel message;
         ComfortVignette vignette;
         GameAudio audioFx;
         SettingsStore settings;
         Transform explosion;
         Material explosionMat;
+        GameObject selector;
         float explosionT = 99;
         Vector3 prevPos;
         Quaternion prevRot;
@@ -74,11 +73,8 @@ namespace Skyreach
             explosion = MeshFactory.Spawn("Explosion", MeshFactory.Icosphere(2), explosionMat, worldRoot, Vector3.zero).transform;
             explosion.gameObject.SetActive(false);
 
-            // Player: jet → rig (seat) → head camera + hands
-            Flight = new FlightModel();
-            jet = JetBuilder.Build(mats, transform);
+            // Pilot: rig (seat) → head camera + hands. The rig is re-parented to whichever aircraft is active.
             rig = new GameObject("Rig").transform;
-            rig.SetParent(jet.transform, false);
             head = new GameObject("Head").AddComponent<Camera>();
             head.tag = "MainCamera";
             head.transform.SetParent(rig, false);
@@ -88,37 +84,92 @@ namespace Skyreach
             head.fieldOfView = 72;
             head.gameObject.AddComponent<AudioListener>();
             xr = rig.gameObject.AddComponent<XRRig>();
-            xr.Init(head, jet.transform, mats);
+            xr.Init(head, rig, mats);
 
-            hud = CockpitHUD.Create(jet.HudAnchor, head);
-            message = MessagePanel.Create(jet.transform, head);
+            message = MessagePanel.Create(rig, head);
             vignette = ComfortVignette.Create(head, VignetteShader ? VignetteShader : Shader.Find("Skyreach/Vignette"), settings.ComfortLevel);
             audioFx = gameObject.AddComponent<GameAudio>();
             audioFx.SetMuted(settings.Muted);
 
-            Flight.Takeoff += OnTakeoff;
-            Flight.Landed += OnLanded;
-            Flight.Crash += OnCrash;
-
-            ResetGame();
-            message.Show("Skyreach VR",
-                $"Grab the throttle with your left hand and push it forward. Pull the stick back at {TakeoffKmh} km/h.", 7);
+            SelectAircraft(settings.Aircraft == "sr22" ? "sr22" : "jet");
+            message.Show(Aircraft.StartMessage[0], Aircraft.StartMessage[1], 7);
         }
+
+        // ------------------------------------------------------------------ aircraft
+        GameContext Context() => new GameContext
+        {
+            Game = this, Input = input, Course = Course, World = World, Message = message, Audio = audioFx, Settings = settings, Time = Time.time,
+        };
+
+        public void SelectAircraft(string id)
+        {
+            if (Aircraft != null && Aircraft.Id == id) return;
+            rig.SetParent(null, true);
+            Aircraft?.Dispose();
+            Aircraft = id == "sr22"
+                ? new Sr22Aircraft(mats, transform, head, World, settings)
+                : (Aircraft)new JetAircraft(mats, transform, head);
+            Aircraft.Ctx = Context();
+            settings.Aircraft = id;
+            settings.Save();
+
+            rig.SetParent(Aircraft.Root, false);
+            rig.localPosition = Vector3.zero;
+            rig.localRotation = Quaternion.identity;
+            message.transform.SetParent(Aircraft.Root, false);
+            message.transform.localPosition = new Vector3(0, 0.2f, 2.6f);
+            xr.SetLayout(Aircraft.Layout, Aircraft.Root);
+            keyboard.SetKeyMap(Aircraft.Keys);
+            BuildSelector();
+
+            Aircraft.Takeoff += OnTakeoff;
+            Aircraft.Landed += (t, s, secs, c) =>
+            {
+                if (State != GameState.Crashed && State != GameState.Ended) message.Show(t, s, secs, c);
+            };
+            Aircraft.Crash += OnCrash;
+            ResetGame();
+            if (XRRig.Active) calibrateIn = 0.3f;
+        }
+
+        /// <summary>A small panel you can touch while parked on the runway to switch aircraft.</summary>
+        void BuildSelector()
+        {
+            selector = new GameObject("AircraftSelector");
+            selector.transform.SetParent(Aircraft.Root, false);
+            var bg = mats.MakeUnlit("SelectorBg", new Color(0.05f, 0.08f, 0.12f, 0.85f), transparent: true);
+            var on = mats.MakeLit("SelectorOn", SkyreachMaterials.Hex(0xffb21a));
+            var off = mats.MakeLit("SelectorOff", SkyreachMaterials.Hex(0x2c333b));
+            var center = new Vector3(0.42f, -0.06f, 0.5f);
+            MeshFactory.Spawn("Bg", MeshFactory.Box(new Vector3(0.26f, 0.15f, 0.005f)), bg, selector.transform, center + new Vector3(0, 0, 0.01f));
+            Sr22Builder.Label(selector.transform, "AIRCRAFT", center + new Vector3(0, 0.055f, -0.002f), Quaternion.identity, 0.0018f, Color.white);
+            var opts = new[] { ("jet", "ARCADE JET", "selectJet", -0.065f), ("sr22", "SR22", "selectSr22", 0.065f) };
+            foreach (var (id, label, action, dx) in opts)
+            {
+                var pos = center + new Vector3(dx, -0.015f, -0.005f);
+                MeshFactory.Spawn(id, MeshFactory.Box(new Vector3(0.11f, 0.06f, 0.012f)), Aircraft.Id == id ? on : off, selector.transform, pos);
+                Sr22Builder.Label(selector.transform, label, pos + new Vector3(0, 0, -0.008f), Quaternion.identity, 0.0016f, Color.white);
+                if (!Aircraft.Layout.PokeTargets.Exists(t => t.Id == "sel-" + id))
+                    Aircraft.Layout.PokeTargets.Add(new PokeTarget { Id = "sel-" + id, Action = action, Position = pos + new Vector3(0, 0, -0.012f), Radius = 0.04f });
+            }
+        }
+
+        public void EndFlight() => State = GameState.Ended;
 
         // ------------------------------------------------------------------ game flow
         public void ResetGame()
         {
-            var spawn = new Vector3(0, RunwayConfig.Height + FlightConfig.GearHeight, -(WorldData.RunwayHalfLength - 40));
-            Flight.Reset(spawn, 0);
+            var spawn = new Vector3(0, RunwayConfig.Height + Aircraft.GearHeight, -(WorldData.RunwayHalfLength - 40));
+            Aircraft.Reset(spawn);
             input.Throttle = 0;
             Course.Reset();
             ringVisuals.Refresh();
             State = GameState.Ready;
             explosion.gameObject.SetActive(false);
-            SyncJet();
-            prevPos = Flight.Position;
-            prevRot = Flight.Rotation;
-            message.Show("Ready for takeoff", $"Throttle up, then pull back at {TakeoffKmh} km/h.", 6);
+            SyncAircraft();
+            prevPos = Aircraft.Position;
+            prevRot = Aircraft.Rotation;
+            message.Show(Aircraft.ReadyMessage[0], Aircraft.ReadyMessage[1], 6);
         }
 
         void OnTakeoff()
@@ -129,25 +180,18 @@ namespace Skyreach
             message.Show("Airborne!", "Fly through the glowing rings in order.", 3);
         }
 
-        void OnLanded(bool offRunway)
-        {
-            if (State == GameState.Finished)
-                message.Show("Touchdown!", offRunway ? "Off-runway, but we will take it." : "Perfect landing. Press A to fly again.", 6, SkyreachMaterials.Hex(0x7fe08a));
-            else
-                message.Show(offRunway ? "Rough landing" : "Landed", "Throttle up to take off again.", 3);
-        }
-
         void OnCrash(string reason)
         {
             State = GameState.Crashed;
             Course.Running = false;
-            explosion.position = Flight.Position;
+            explosion.position = Aircraft.Position;
             explosion.gameObject.SetActive(true);
             explosionT = 0;
             audioFx.Crash();
             xr.Pulse(XRNode.LeftHand, 1, 0.4f);
             xr.Pulse(XRNode.RightHand, 1, 0.4f);
-            message.Show("Crashed!", reason + " Press A (or Enter) to restart.", float.PositiveInfinity, SkyreachMaterials.Hex(0xff7a5a));
+            string how = Aircraft.Id == "sr22" ? "Hold Y (or Enter) to restart." : "Press A (or Enter) to restart.";
+            message.Show("Crashed!", reason + " " + how, float.PositiveInfinity, SkyreachMaterials.Hex(0xff7a5a));
         }
 
         void OnRing(RingEvent ev)
@@ -158,9 +202,9 @@ namespace Skyreach
             {
                 State = GameState.Finished;
                 audioFx.Chime(true);
-                float best = settings.BestTime;
+                float best = settings.GetBest(Aircraft.Id);
                 bool isBest = best < 0 || ev.Time < best;
-                if (isBest) { settings.BestTime = ev.Time; settings.Save(); }
+                if (isBest) settings.SetBest(Aircraft.Id, ev.Time);
                 string sub = "Time " + CockpitHUD.FormatTime(ev.Time) + (isBest ? "" : $"  (best {CockpitHUD.FormatTime(best)})") + ". Now land on the runway!";
                 message.Show(isBest ? "New record!" : "Course complete!", sub, 8, Gold);
             }
@@ -176,6 +220,7 @@ namespace Skyreach
         {
             float dt = Mathf.Min(Time.deltaTime, 0.05f);
             bool inVR = XRRig.Active;
+            Aircraft.Ctx = Context();
 
             if (inVR && calibrateIn > 0)
             {
@@ -187,39 +232,36 @@ namespace Skyreach
 
             if (State != GameState.Crashed)
             {
-                prevPos = Flight.Position;
-                prevRot = Flight.Rotation;
-                Flight.Update(dt, input.ToFlightInput(), World.Sample);
+                prevPos = Aircraft.Position;
+                prevRot = Aircraft.Rotation;
+                Aircraft.Step(dt, input, World.Sample);
                 if (State == GameState.Flying || State == GameState.Finished)
                 {
                     Course.Tick(dt);
-                    var ev = Course.Check(prevPos, Flight.Position);
+                    var ev = Course.Check(prevPos, Aircraft.Position);
                     if (ev.Type != RingEventType.None) OnRing(ev);
                 }
             }
 
-            SyncJet();
+            SyncAircraft();
             if (!inVR) UpdateDesktopCamera();
+            selector.SetActive(State == GameState.Ready && Aircraft.OnGround && Aircraft.Speed < 1);
 
-            float angSpeed = State == GameState.Crashed ? 0 : Quaternion.Angle(prevRot, Flight.Rotation) * Mathf.Deg2Rad / Mathf.Max(dt, 1e-4f);
+            float angSpeed = State == GameState.Crashed ? 0 : Quaternion.Angle(prevRot, Aircraft.Rotation) * Mathf.Deg2Rad / Mathf.Max(dt, 1e-4f);
             vignette.Tick(dt, angSpeed);
-            jet.SetControls(Flight.PitchInput, Flight.RollInput, Flight.Throttle, Flight.Boosting);
-            jet.StickHighlight.SetActive(input.StickNear && !input.StickGrabbed);
-            jet.ThrottleHighlight.SetActive(input.ThrottleNear && !input.ThrottleGrabbed);
+            Aircraft.UpdateVisuals(dt, input);
             UpdateExplosion(dt);
-            hud.UpdateHud(dt, BuildHud());
-            audioFx.Tick(Flight.Throttle, Flight.Speed, Flight.Boosting, State == GameState.Crashed);
+            audioFx.Tick(Aircraft.Throttle, Aircraft.Speed, Aircraft.Boosting, State == GameState.Crashed, Aircraft.AudioProfile, Aircraft.Rpm);
             input.ClearEdges();
         }
 
         void HandleButtons(bool inVR)
         {
-            if (input.Restart && (State != GameState.Flying || Flight.OnGround)) ResetGame();
+            if (input.Restart && (State != GameState.Flying || Aircraft.OnGround)) ResetGame();
             else if (input.Restart && State == GameState.Flying)
             {
-                // Mid-air restart needs a second press within 2 s, to avoid accidents.
                 if (Time.time - lastRestartPress < 2) ResetGame();
-                else message.Show("Restart?", "Press A again to go back to the runway.", 2);
+                else message.Show("Restart?", Aircraft.Id == "sr22" ? "Hold again to go back to the runway." : "Press A again to go back to the runway.", 2);
                 lastRestartPress = Time.time;
             }
             if (input.CycleComfort)
@@ -242,6 +284,11 @@ namespace Skyreach
                 message.Show("Seat re-centred", "", 1.2f);
             }
             if (input.ToggleView && !inVR) chaseView = !chaseView;
+            bool canSwitch = Aircraft.OnGround && State != GameState.Flying || State == GameState.Crashed || State == GameState.Ended;
+            if (canSwitch && input.Actions.Contains("selectJet")) { SelectAircraft("jet"); return; }
+            if (canSwitch && input.Actions.Contains("selectSr22")) { SelectAircraft("sr22"); return; }
+            if (State != GameState.Crashed)
+                foreach (var action in input.Actions) Aircraft.HandleAction(action);
         }
 
         /// <summary>Move the rig so the player's real head sits at the pilot's eye point, facing the nose.</summary>
@@ -253,10 +300,7 @@ namespace Skyreach
             rig.localPosition = -(rig.localRotation * headPos);
         }
 
-        void SyncJet()
-        {
-            jet.transform.SetPositionAndRotation(Flight.Position, Flight.Rotation);
-        }
+        void SyncAircraft() => Aircraft.Root.SetPositionAndRotation(Aircraft.Position, Aircraft.Rotation);
 
         void UpdateDesktopCamera()
         {
@@ -275,9 +319,10 @@ namespace Skyreach
                 lookPitch = Mathf.Clamp(lookPitch - Input.GetAxis("Mouse Y") * 4f, -70, 70);
             }
 #endif
+            Aircraft.SetCockpitView(!chaseView);
             if (chaseView)
             {
-                rig.localPosition = new Vector3(0, 4.5f, -20f);
+                rig.localPosition = new Vector3(Aircraft.Id == "sr22" ? Sr22Layout.CX : 0, 4.5f, -20f);
                 rig.localRotation = Quaternion.Euler(7, 0, 0);
                 head.transform.localPosition = Vector3.zero;
                 head.transform.localRotation = Quaternion.identity;
@@ -300,37 +345,6 @@ namespace Skyreach
             c.a = Mathf.Max(0, 0.9f - explosionT * 0.6f);
             explosionMat.color = c;
             if (explosionT > 1.6f) explosion.gameObject.SetActive(false);
-        }
-
-        HudData BuildHud()
-        {
-            var f = Flight;
-            var d = new HudData
-            {
-                Speed = f.Speed,
-                Altitude = f.Altitude,
-                VerticalSpeed = f.Velocity.y,
-                Throttle = f.Throttle,
-                BoostFuel = f.BoostFuel,
-                Boosting = f.Boosting,
-                Stalling = f.Stalling,
-                OnGround = f.OnGround,
-                Brake = input.Brake,
-                Bank = f.Bank,
-                PitchAngle = f.PitchAngle,
-                Heading = f.Heading,
-                RingIndex = Course.Index,
-                Elapsed = Course.Elapsed,
-                HasRing = !Course.Finished,
-            };
-            if (d.HasRing)
-            {
-                Vector3 toRing = Course.Current.Position - f.Position;
-                d.RingDistance = toRing.magnitude;
-                Vector3 local = Quaternion.Inverse(f.Rotation) * toRing;
-                d.RingBearing = Mathf.Atan2(local.x, local.z);
-            }
-            return d;
         }
     }
 }

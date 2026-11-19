@@ -15,5 +15,7 @@
     <Compile Include="../../Assets/Skyreach/Scripts/World/WorldData.cs" />
     <Compile Include="../../Assets/Skyreach/Scripts/World/RaceCourse.cs" />
     <Compile Include="../../Assets/Skyreach/Scripts/Aircraft/FlightModel.cs" />
+    <Compile Include="../../Assets/Skyreach/Scripts/Aircraft/Sr22/Sr22Data.cs;../../Assets/Skyreach/Scripts/Aircraft/Sr22/Sr22Physics.cs;../../Assets/Skyreach/Scripts/Aircraft/Sr22/Sr22Autopilot.cs;../../Assets/Skyreach/Scripts/Aircraft/Sr22/Sr22SafeReturn.cs" />
+    <Compile Include="Sr22Tests.cs" />
   </ItemGroup>
 </Project>
